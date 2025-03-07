@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gene Knowledge Base - Volcano Plot</title>
+    <!-- Add Plotly.js CDN -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Volcano Plot</h1>
+
+    <!-- Display the plot -->
+    <div>
+        {{ plot|safe }}
+    </div>
+
+    <h2>Data Preview</h2>
+    <div>
+        {{ data|safe }}
+    </div>
+</body>
+</html>
