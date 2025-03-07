@@ -1,31 +1,44 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template
+import pandas as pd
+import numpy as np
 import plotly.express as px
-from utils.excel_utils import read_excel_data, create_volcano_plot
+from utils.excel_utils import read_excel_data
+from flask_cors import CORS
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    # Path to your Excel file
+CORS(app)
+
+# Route for generating the 3D volcano plot data
+@app.route('/plot_data')
+def plot_data():
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
-        # Read the data
+        # Učitavanje podataka
         s4b_data = read_excel_data(file_path)
 
-        # Generate the volcano plot using the function from excel_utils.py
-        plot_filename = create_volcano_plot(s4b_data)
+        # Računanje -log10 za adj.P.Val
+        s4b_data['-log10(adj.P.Val)'] = -np.log10(s4b_data['adj.P.Val'])
+        s4b_data['Z_value'] = 0  # Z-axis is fixed at 0 for now
 
-        # Open the saved plot (HTML file) and embed it into the page with utf-8 encoding
-        with open(plot_filename, 'r', encoding='utf-8') as plot_file:
-            plot_html = plot_file.read()
+        # Ekstrakcija podataka koji su potrebni za 3D plot
+        plot_data = {
+            'x': s4b_data['Z_value'].tolist(),
+            'y': s4b_data['logFC'].tolist(),
+            'z': s4b_data['-log10(adj.P.Val)'].tolist(),
+            'color': s4b_data['-log10(adj.P.Val)'].tolist(),
+            'hover_data': s4b_data['EntrezGeneSymbol'].tolist()
+        }
 
-        # Pass the plot HTML and some data to the template
-        return render_template('index.html', plot=plot_html, data=s4b_data.head().to_html())
+        return jsonify(plot_data)  # Send the data in JSON format
 
     except Exception as e:
-        # Handle any error that may occur
-        return f"An error occurred: {str(e)}"
+        return jsonify({"error": str(e)})
+
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

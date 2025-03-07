@@ -1,0 +1,25 @@
+/* Ensure that the body and html elements take the full height of the viewport */
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #09122C;
+}
+
+/* Set the plot to take up between 10% and 90% of the height */
+#myDiv {
+    width: 100%;
+    height: 80vh;  /* 80% of the viewport height */
+    margin-top: 10vh; /* Start 10% from the top */
+    margin-bottom: 10vh; /* End 10% before the bottom */
+    position: relative;
+}
+
+/* Optional: to prevent body overflow from affecting the plot */
+html {
+    overflow: hidden;
+}

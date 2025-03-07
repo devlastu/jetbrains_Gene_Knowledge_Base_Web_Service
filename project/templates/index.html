@@ -5,19 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gene Knowledge Base - Volcano Plot</title>
     <!-- Add Plotly.js CDN -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src='https://cdn.plot.ly/plotly-3.0.0.min.js'></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Volcano Plot</h1>
-
-    <!-- Display the plot -->
-    <div>
-        {{ plot|safe }}
-    </div>
-
-    <h2>Data Preview</h2>
-    <div>
-        {{ data|safe }}
-    </div>
+    <div id="myDiv"></div>
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
