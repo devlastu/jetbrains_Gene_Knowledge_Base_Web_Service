@@ -22,9 +22,9 @@ def create_volcano_plot_3d(data):
 
     # Kreiranje 3D volcano plot-a sa permutovanim koordinatama
     fig = px.scatter_3d(data_frame=data,
-                         x='Z_value',  # X postaje -log10(adj.P.Val)
-                         y='logFC',  # Y postaje logFC
-                         z='-log10(adj.P.Val)',  # Z koordinate će biti postavljene na 0 ili neku drugu vrednost
+                         x='logFC',  # X postaje -log10(adj.P.Val)
+                         y='-log10(adj.P.Val)',  # Y postaje logFC
+                         z='Z_value',  # Z koordinate će biti postavljene na 0 ili neku drugu vrednost
                          color='-log10(adj.P.Val)',  # Boja prema značajnosti
                          hover_data=['EntrezGeneSymbol'],
                          title="3D Volcano Plot (Shifted Axes)",
@@ -35,9 +35,9 @@ def create_volcano_plot_3d(data):
     # Podesi izgled plot-a
     fig.update_layout(
         scene=dict(
-            xaxis_title="Z Axis (Fixed 0)",  # Preimenovano zbog zamene
-            yaxis_title="X Axis (Log2 Fold Change)",
-            zaxis_title="Y Axis (-Log10 Adjusted P-Value)",  # Z se postavlja kao statička vrednost
+            xaxis_title="X Axis (Log2 Fold Change)",  # Preimenovano zbog zamene
+            yaxis_title="Y Axis (-Log10 Adjusted P-Value)",
+            zaxis_title="Z Axis (Fixed 0)",  # Z se postavlja kao statička vrednost
             camera=dict(eye=dict(x=2, y=1, z=0.5))  # Početni ugao kamere
         ),
         showlegend=False
@@ -50,7 +50,7 @@ def create_volcano_plot_3d(data):
 
 
 # Funkcija za čitanje podataka iz Excel fajla
-def read_excel_data(file_path):
+def read_excel_data(file_path, sheet):
     # Učitavanje Excel fajla i čitanje sheet-a "S4B limma results"
     excel_data = pd.ExcelFile(file_path)
 
@@ -59,7 +59,7 @@ def read_excel_data(file_path):
         raise ValueError("Sheet 'S4B limma results' not found in the Excel file.")
 
     # Učitavanje podataka sa sheet-a, preskakanje prvog reda
-    s4b_data = excel_data.parse("S4B limma results", skiprows=2)
+    s4b_data = excel_data.parse(sheet, skiprows=2)
 
     # Uklanjanje eventualnih praznih kolona ili nepotrebnih razmaka u nazivima kolona
     s4b_data.columns = s4b_data.columns.str.strip()
@@ -102,22 +102,3 @@ def create_volcano_plot(data):
     fig.write_html(plot_filename)
     return plot_filename
 
-# Funkcija za čitanje podataka iz Excel fajla
-def read_excel_data(file_path):
-    # Učitavanje Excel fajla i čitanje sheet-a "S4B limma results"
-    excel_data = pd.ExcelFile(file_path)
-
-    # Provera dostupnih sheet-ova
-    if 'S4B limma results' not in excel_data.sheet_names:
-        raise ValueError("Sheet 'S4B limma results' not found in the Excel file.")
-
-    # Učitavanje podataka sa sheet-a, preskakanje prvog reda
-    s4b_data = excel_data.parse("S4B limma results", skiprows=2)
-
-    # Uklanjanje eventualnih praznih kolona ili nepotrebnih razmaka u nazivima kolona
-    s4b_data.columns = s4b_data.columns.str.strip()
-
-    # Čišćenje podataka, ako je potrebno, uklanjanje praznih kolona
-    s4b_data = s4b_data.loc[:, ~s4b_data.columns.str.contains('^Unnamed')]
-
-    return s4b_data

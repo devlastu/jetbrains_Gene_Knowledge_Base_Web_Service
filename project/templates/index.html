@@ -9,7 +9,20 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div id="myDiv"></div>
+    <button id="resetButton">
+        Reset to Initial Position
+    </button>
+    <div id="loader" style="display: none;">Loading...</div>
+
+    <div id="myDiv">
+        <div id="sidebar">
+            <h2>Information</h2>
+
+            <div id="protein-plot"></div>
+            <div id="sidebar-content"></div>
+            <button id="closeSidebar">Close</button>
+        </div>
+    </div>
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
