@@ -1,5 +1,49 @@
-let initialCameraPosition = null;
-let isDragging = false; // Flag za praćenje draga
+let initialCameraPosition = {
+    eye: { x:100, y: 0, z: -35 },
+    center: { x: 0, y: 0, z: 0 },
+    up: { x: 0, y: 0, z: 1 }
+};
+
+let is3D = true; // Početno stanje je 3D
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadAndCreatePlot();
+    setupResetButton();  // Poveži dugme sa funkcionalnošću
+    const plotElement = document.getElementById('myDiv');
+    if (plotElement) {
+        Plotly.relayout(plotElement).then(() => {
+            const scene = plotElement._fullLayout.scene;
+            if (scene && scene.camera) {
+                trackCameraRotation(scene.camera);
+            }
+        });
+    }
+
+
+    const toggleButton = document.getElementById("toggleButton");
+    toggleButton.textContent = "2D"; // Dugme počinje s natpisom '2D'
+
+    toggleButton.addEventListener("click", function () {
+        if (is3D) {
+            loadAndCreatePlot();
+            toggleButton.textContent = "3D"; // Kada je u 2D modu, dugme treba da kaže '3D'
+        } else {
+            loadAndCreatePlot();
+            toggleButton.textContent = "2D"; // Kada je u 3D modu, dugme treba da kaže '2D'
+        }
+        is3D = !is3D; // Obrće stanje prikaza
+    });
+})
+
+window.addEventListener('resize', function() {
+    Plotly.relayout('myDiv', {
+        width: window.innerWidth,
+        height: window.innerHeight
+    });
+});
+
+
+
 
 // Funkcija za praćenje rotacije
 function trackCameraRotation(currentCamera) {
@@ -93,15 +137,8 @@ function getColor(value, min, max) {
 
     return colors[colorIndex];
 }
-// Funkcija za dobijanje granica podataka
-function getDataBounds(data) {
-    const xBounds = [Math.min(...data.z), Math.max(...data.z)];
-    const yBounds = [Math.min(...data.x), Math.max(...data.x)];
-    const zBounds = [Math.min(...data.y), Math.max(...data.y)];
-    return [xBounds[1], yBounds[1], zBounds[1]];
-}
 
-// Funkcija za kreiranje 3D plot-a
+
 function createPlot(data) {
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
@@ -113,12 +150,13 @@ function createPlot(data) {
         z: data.y,
         mode: 'markers',
         marker: {
-            size: 10,
+            size: 20,
             color: colors,
-            opacity: 20,
-            line: { color: 'rgba(217, 217, 217, 0)', width: 0}
+            opacity: 0.7,
+            line: { color: 'rgba(217, 217, 217, 0.15)', width: 0 }
         },
-        customdata: data.geneNames.map((gene, index) => ({ geneName: gene, dataIndex: index })),hovertemplate: 'X: %{x}<br>Y: %{y}<br>Z: %{z}<extra></extra>',
+        customdata: data.geneNames.map((gene, index) => ({ geneName: gene, dataIndex: index })),
+        hovertemplate: 'X: %{x}<br>Y: %{y}<br>Z: %{z}<br>Gene: %{customdata.geneName}<extra></extra>',
         type: 'scatter3d'
     };
 
@@ -127,134 +165,54 @@ function createPlot(data) {
         height: window.innerHeight,
         margin: { l: 0, r: 0, b: 0, t: 0 },
         scene: {
-            xaxis: {
-                title: "",
-                showgrid: false,
-                zeroline: false,
-                showbackground: false,
-                showticklabels: false
-            },
-            yaxis: {
-                title: "",
-                showgrid: false,
-                zeroline: false,
-                showbackground: false,
-                showticklabels: false
-            },
-            zaxis: {
-                title: "",
-                showgrid: false,
-                zeroline: false,
-                showbackground: false,
-                showticklabels: false
-            },
+            xaxis: { showgrid: false, zeroline: false, showbackground: false, showticklabels: false },
+            yaxis: { showgrid: false, zeroline: false, showbackground: false, showticklabels: false },
+            zaxis: { showgrid: false, zeroline: false, showbackground: false, showticklabels: false },
             aspectmode: 'manual',
-            aspectratio: { x: 16, y: 40, z: 40 },
-            camera: { eye: { x: 1.5, y: 1.5, z: 1.5 } } // Početna pozicija kamere
+            aspectratio: { x: 70, y: 150, z: 70 },
+            camera: initialCameraPosition
         },
         paper_bgcolor: "#232323",
         plot_bgcolor: "#232323FF",
-        font: { color: "#232323FF" },
-        dragmode: 'orbit', // Omogućava rotaciju na drag
+        font: { color: "#272727" },
+        dragmode: 'orbit',
         showlegend: false,
         hovermode: 'closest'
     };
 
-    // Spremi početnu poziciju kamere
-    let initialCameraPosition = {
-        eye: { x: 1.5, y: 1.5, z: 1.5 },
-        center: { x: 0, y: 0, z: 0 },
-        up: { x: 0, y: 0, z: 1 }
-    };
-
-    // Ubrzaj scroll zoom pomoću wheel događaja
-    let zoomFactor = 1.2; // Faktor koji kontroliše brzinu zoom-a
-
-    document.getElementById('myDiv').onwheel = function(event) {
-        if (event.deltaY > 0) {
-            // Zoom out (smanjivanje)
-            zoomFactor = 1.5; // Ubrzaj zoom out
-        } else {
-            // Zoom in (uvećanje)
-            zoomFactor = 0.7; // Ubrzaj zoom in
-        }
-
-        // Promeni poziciju kamere na osnovu brzine zoom-a
-        initialCameraPosition.eye.x *= zoomFactor;
-        initialCameraPosition.eye.y *= zoomFactor;
-        initialCameraPosition.eye.z *= zoomFactor;
-
-        // Ažuriraj kameru sa novim zoom faktorom
-        Plotly.relayout('myDiv', {
-            'scene.camera.eye': initialCameraPosition.eye
-        });
-    };
-
-    // Kreiraj plot
     Plotly.newPlot('myDiv', [trace], layout).then(function() {
-        // Sakrij loader kad je plot kreiran
         const loader = document.getElementById('loader');
         if (loader) loader.style.display = 'none';
 
-        // Dodaj event listener za praćenje draga
         const plotElement = document.getElementById('myDiv');
 
-        plotElement.on('plotly_relayout', function(eventData) {
-            console.log("relayout done");
-        });
-
-        plotElement.on('plotly_relayout', function(eventData) {
-            if (eventData['scene.camera']) {
-                const currentCamera = eventData['scene.camera'];
-                // console.log("Camera position changed:", currentCamera);
-
-                // Proveri da li je kamera pomerena u odnosu na početnu poziciju
-                if (
-                    Math.abs(currentCamera.eye.x - initialCameraPosition.eye.x) > 0.001 ||
-                    Math.abs(currentCamera.eye.y - initialCameraPosition.eye.y) > 0.001 ||
-                    Math.abs(currentCamera.eye.z - initialCameraPosition.eye.z) > 0.001
-                ) {
-                    isDragging = true; // Zabilježi drag
-                    // console.log("Drag detected.");
-                } else {
-                    isDragging = false; // Resetuj flag ako je kamera vraćena na početnu poziciju
-                }
-            }
-        });
-
-         plotElement.on('plotly_relayout', function(eventData) {
-            if (eventData['scene.camera']) {
-                const currentCamera = eventData['scene.camera'];
-                // Izračunaj promenjenu udaljenost kamere
-                const cameraDistance = Math.sqrt(
-                    Math.pow(currentCamera.eye.x, 2) +
-                    Math.pow(currentCamera.eye.y, 2) +
-                    Math.pow(currentCamera.eye.z, 2)
-                );
-
-                // Menjaj veličinu tačaka na osnovu udaljenosti kamere
-                const newSize = Math.max(5, Math.min(30, 7 * (4/cameraDistance)));
-                console.log(newSize);
-                console.log(cameraDistance);
-                // Ažuriraj veličinu marker-a
-                Plotly.restyle('myDiv', 'marker.size', Array(data.y.length).fill(newSize));
-            }
-        });
+        // Consolidate the plotly_relayout event handlers
+        // plotElement.on('plotly_relayout', function(eventData) {
+        //     console.log("relayout done");
+        //
+        //     const currentCamera = eventData['scene.camera'];
+        //     if (currentCamera) {
+        //         const cameraDistance = Math.sqrt(
+        //             Math.pow(currentCamera.eye.x, 2) +
+        //             Math.pow(currentCamera.eye.y, 2) +
+        //             Math.pow(currentCamera.eye.z, 2)
+        //         );
+        //         const newSize = Math.max(5, Math.min(100, 7 * (4 / cameraDistance)));
+        //         console.log(newSize);
+        //         Plotly.restyle('myDiv', 'marker.size', Array(data.y.length).fill(newSize));
+        //     }
+        // });
 
         // Handle click event on plot points
         plotElement.on('plotly_click', function(eventData) {
-            // console.log(eventData);
             const proteinPlot = document.getElementById('protein-plot');
             proteinPlot.style.display = 'block';
-            const geneName = eventData.points[0].customdata.geneName; // Extract geneName
-            // console.log(geneName);
-            fetchProteinConcentrationData(geneName)  // Fetch protein concentration data
+            const geneName = eventData.points[0].customdata.geneName;
+            fetchProteinConcentrationData(geneName)
                 .then(proteinData => {
                     console.log(proteinData);
                     if (proteinData.young && proteinData.old) {
-                        create2DPlot(proteinData);  // Create the 2D plot (volcano plot)
-
-                        // Call fillInData to populate other gene information
+                        createProteinPLot(proteinData);
                         fillInData(proteinData);
                     } else {
                         console.error("Error: Missing data for plotting.");
@@ -264,33 +222,132 @@ function createPlot(data) {
                     console.error("Error fetching protein concentration data:", error);
                 });
 
-            // Function to dynamically populate the HTML with protein data
             function fillInData(proteinData) {
                 const infoContainer = document.getElementById("sidebar-content");
 
-                // Populate protein concentration data
-                infoContainer.innerHTML = `
-                    <h3>Protein Information for Gene: ${proteinData.additionalInfo.EntrezGeneSymbol}</h3>
-                    <p><strong>Gene Name:</strong> ${proteinData.additionalInfo.TargetFullName}</p>
-                    <p><strong>Target:</strong> ${proteinData.additionalInfo.Target}</p>
-                    <p><strong>Entrez Gene ID:</strong> ${proteinData.additionalInfo.EntrezGeneID}</p>
-                    <p><strong>Organism:</strong> ${proteinData.additionalInfo.Organism}</p>
-                    <p><strong>Units:</strong> ${proteinData.additionalInfo.Units}</p>
-                    <p><strong>Type:</strong> ${proteinData.additionalInfo.Type}</p>
-                    <p><strong>Dilution:</strong> ${proteinData.additionalInfo.Dilution}</p>
-                    
-                    <h4>Protein Concentration (Young vs Old Donors)</h4>
-                    
-                `;
+                if (proteinData && proteinData.additionalInfo) {
+                    infoContainer.innerHTML = `
+                        <h3>Protein Information for Gene: ${proteinData.additionalInfo.EntrezGeneSymbol}</h3>
+                        <p><strong>Gene Name:</strong> ${proteinData.additionalInfo.TargetFullName}</p>
+                        <p><strong>Target:</strong> ${proteinData.additionalInfo.Target}</p>
+                        <p><strong>Entrez Gene ID:</strong> ${proteinData.additionalInfo.EntrezGeneID}</p>
+                        <p><strong>Organism:</strong> ${proteinData.additionalInfo.Organism}</p>
+                        <p><strong>Units:</strong> ${proteinData.additionalInfo.Units}</p>
+                        <p><strong>Type:</strong> ${proteinData.additionalInfo.Type}</p>
+                        <p><strong>Dilution:</strong> ${proteinData.additionalInfo.Dilution}</p>
+                        <h4>Protein Concentration (Young vs Old Donors)</h4>
+                    `;
+                } else {
+                    console.error("Protein data is missing or malformed.");
+                }
             }
+        });
+    });
+}
 
+function create2DPlot(data) {
+    const minValue = Math.min(...data.y);
+    const maxValue = Math.max(...data.y);
+    const colors = data.y.map(value => getColor(value, minValue, maxValue));
+
+    const trace = {
+        x: data.x, // X ostaje isto
+        y: data.y, // Y ostaje isto
+        mode: 'markers',
+        marker: {
+            size: 10,
+            color: colors,
+            opacity: 0.7,
+            line: { color: 'rgba(217, 217, 217, 0.15)', width: 0 }
+        },
+        customdata: data.geneNames.map((gene, index) => ({ geneName: gene, dataIndex: index })),
+        hovertemplate: 'X: %{x}<br>Y: %{y}<br>Gene: %{customdata.geneName}<extra></extra>',
+        type: 'scatter' // 2D scatter plot
+    };
+
+    const layout = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        margin: { l: 40, r: 40, b: 40, t: 40 },
+        xaxis: { showgrid: true, title: "X Axis" },
+        yaxis: { showgrid: true, title: "Y Axis" },
+        paper_bgcolor: "#232323",
+        plot_bgcolor: "#232323FF",
+        font: { color: "#FFFFFF" },
+        showlegend: false,
+        hovermode: 'closest'
+    };
+
+    Plotly.newPlot('myDiv', [trace], layout).then(function() {
+        const loader = document.getElementById('loader');
+        if (loader) loader.style.display = 'none';
+
+        const plotElement = document.getElementById('myDiv');
+
+        // Consolidate the plotly_relayout event handlers
+        // plotElement.on('plotly_relayout', function(eventData) {
+        //     console.log("relayout done");
+        //
+        //     const currentCamera = eventData['scene.camera'];
+        //     if (currentCamera) {
+        //         const cameraDistance = Math.sqrt(
+        //             Math.pow(currentCamera.eye.x, 2) +
+        //             Math.pow(currentCamera.eye.y, 2) +
+        //             Math.pow(currentCamera.eye.z, 2)
+        //         );
+        //         const newSize = Math.max(5, Math.min(100, 7 * (4 / cameraDistance)));
+        //         console.log(newSize);
+        //         Plotly.restyle('myDiv', 'marker.size', Array(data.y.length).fill(newSize));
+        //     }
+        // });
+
+        // Handle click event on plot points
+        plotElement.on('plotly_click', function(eventData) {
+            const proteinPlot = document.getElementById('protein-plot');
+            proteinPlot.style.display = 'block';
+            const geneName = eventData.points[0].customdata.geneName;
+            fetchProteinConcentrationData(geneName)
+                .then(proteinData => {
+                    console.log(proteinData);
+                    if (proteinData.young && proteinData.old) {
+                        createProteinPLot(proteinData);
+                        fillInData(proteinData);
+                    } else {
+                        console.error("Error: Missing data for plotting.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Error fetching protein concentration data:", error);
+                });
+
+            function fillInData(proteinData) {
+                const infoContainer = document.getElementById("sidebar-content");
+
+                if (proteinData && proteinData.additionalInfo) {
+                    infoContainer.innerHTML = `
+                        <h3>Protein Information for Gene: ${proteinData.additionalInfo.EntrezGeneSymbol}</h3>
+                        <p><strong>Gene Name:</strong> ${proteinData.additionalInfo.TargetFullName}</p>
+                        <p><strong>Target:</strong> ${proteinData.additionalInfo.Target}</p>
+                        <p><strong>Entrez Gene ID:</strong> ${proteinData.additionalInfo.EntrezGeneID}</p>
+                        <p><strong>Organism:</strong> ${proteinData.additionalInfo.Organism}</p>
+                        <p><strong>Units:</strong> ${proteinData.additionalInfo.Units}</p>
+                        <p><strong>Type:</strong> ${proteinData.additionalInfo.Type}</p>
+                        <p><strong>Dilution:</strong> ${proteinData.additionalInfo.Dilution}</p>
+                        <h4>Protein Concentration (Young vs Old Donors)</h4>
+                    `;
+                } else {
+                    console.error("Protein data is missing or malformed.");
+                }
+            }
         });
     });
 }
 
 
+
+
 // Funkcija za kreiranje 2D plot-a
-function create2DPlot(data) {
+function createProteinPLot(data) {
     // Osiguraj da podaci postoje
     if (!data.young || !data.old) {
         console.error("Error: Missing data for plotting.");
@@ -323,7 +380,7 @@ function create2DPlot(data) {
         marker: {
             size: 10,
             color: 'rgba(255, 99, 132, 1)', // Boja za stare (red)
-            opacity: 0,
+            opacity: 1,
             line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
         },
         name: 'Old Donors',
@@ -431,43 +488,17 @@ function setupResetButton() {
 function loadAndCreatePlot() {
     fetchData()
         .then(data => {
-            createPlot(data);  // Kreiraj plot koristeći podatke
+            if(is3D){
+                createPlot(data);  // Kreiraj plot koristeći podatke
+            }else{
+                create2DPlot(data);
+            }
+
             // simulateClickOnCenter();
         })
         .catch(error => {
             console.error("Error in loading or creating plot:", error);
         });
 }
-
-document.addEventListener('DOMContentLoaded', function() {
-    loadAndCreatePlot();
-    setupResetButton();  // Poveži dugme sa funkcionalnošću
-    trackCameraRotation();
-    const plotElement = document.getElementById('myDiv');
-    if (plotElement) {
-        plotElement.onmousedown = function() {
-            console.log("Mouse down on plot!");
-            isDragging = true;
-        };
-
-        plotElement.onmouseup = function() {
-            console.log("Mouse up on plot!");
-            isDragging = false;
-        };
-
-        plotElement.onmousemove = function() {
-            if (isDragging) {
-                console.log("Dragging the plot!");
-            }
-        };
-    }
-})
-
-window.addEventListener('resize', function() {
-    Plotly.relayout('myDiv', {
-        width: window.innerWidth,
-        height: window.innerHeight
-    });
-});
 
 
