@@ -213,6 +213,7 @@ function createPlot(data) {
                     console.log(proteinData);
                     if (proteinData.young && proteinData.old) {
                         createProteinPLot(proteinData);
+                        loadGenePapers(geneName);
                         fillInData(proteinData);
                     } else {
                         console.error("Error: Missing data for plotting.");
@@ -311,6 +312,7 @@ function create2DPlot(data) {
                     console.log(proteinData);
                     if (proteinData.young && proteinData.old) {
                         createProteinPLot(proteinData);
+                        loadGenePapers(geneName);
                         fillInData(proteinData);
                     } else {
                         console.error("Error: Missing data for plotting.");
@@ -319,6 +321,7 @@ function create2DPlot(data) {
                 .catch(error => {
                     console.error("Error fetching protein concentration data:", error);
                 });
+
 
             function fillInData(proteinData) {
                 const infoContainer = document.getElementById("sidebar-content");
@@ -364,7 +367,7 @@ function createProteinPLot(data) {
         mode: 'markers',
         marker: {
             size: 10,
-            color: 'rgba(0, 123, 255, 1)', // Boja za mlade (light blue)
+            color: '#d3904b', // Boja za mlade (light blue)
             opacity: 1,
             line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
         },
@@ -379,7 +382,7 @@ function createProteinPLot(data) {
         mode: 'markers',
         marker: {
             size: 10,
-            color: 'rgba(255, 99, 132, 1)', // Boja za stare (red)
+            color: '#8C3061', // Boja za stare (red)
             opacity: 1,
             line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
         },
@@ -397,8 +400,8 @@ function createProteinPLot(data) {
         width: sidebarWidth,  // Koristi širinu sidebar-a
         height: plotHeight,   // Koristi visinu 30% od prozora
         margin: { l: 20, r: 20, b: 40, t: 40 },  // Opcionalni margini
-        paper_bgcolor: "#02091e",
-        plot_bgcolor: "#02091e",
+        paper_bgcolor: "#000000",
+        plot_bgcolor: "#000000",
         font: { color: "#ffffff" },
         showlegend: true,
         hovermode: 'closest'
@@ -406,6 +409,79 @@ function createProteinPLot(data) {
 
     // Kreiraj plot u #protein-plot div-u
     Plotly.newPlot('protein-plot', [traceYoung, traceOld], layout);
+}
+
+function loadGenePapers(geneName) {
+    let allPapers = [];
+    let visiblePapers = 3; // Početno prikazivanje 3 rada
+
+    // Provera da li elementi postoje
+    const sidebarContent = document.getElementById("scientific-paper");
+    if (!sidebarContent) {
+        console.error("Error: Element #scientific-paper not found.");
+        return;
+    }
+
+    // Kreiraj "Show More" dugme ako ne postoji
+    let loadMoreBtn = document.getElementById("loadMoreBtn");
+    if (!loadMoreBtn) {
+        loadMoreBtn = document.createElement("button");
+        loadMoreBtn.id = "loadMoreBtn";
+        loadMoreBtn.innerText = "Show More";
+        loadMoreBtn.style.marginTop = "10px";
+        sidebarContent.after(loadMoreBtn);
+    }
+
+    // Funkcija za prikaz radova
+    function displayPapers() {
+        sidebarContent.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
+
+        const list = document.createElement("ul");
+        for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
+            const item = document.createElement("li");
+            item.innerHTML = `<a href="${allPapers[i]}" target="_blank">PubMed link: ${allPapers[i]}</a>`;
+            list.appendChild(item);
+        }
+
+        sidebarContent.appendChild(list);
+
+        // Dodaj Show More dugme ako je potrebno
+        if (visiblePapers < allPapers.length) {
+            loadMoreBtn.style.display = "block";
+            loadMoreBtn.innerText = "Show More";
+        } else {
+            loadMoreBtn.style.display = "block";
+            loadMoreBtn.innerText = "Show Less";
+        }
+
+        // Omogućiti skrolovanje unutar scientific-paper div-a
+        sidebarContent.style.maxHeight = "300px";
+        sidebarContent.style.overflowY = "auto";
+    }
+
+    // Klik na Show More / Show Less
+    loadMoreBtn.addEventListener("click", function () {
+        if (loadMoreBtn.innerText === "Show More") {
+            visiblePapers = allPapers.length; // Učitaj sve radove
+        } else {
+            visiblePapers = 3; // Resetuj na 3 rada
+        }
+        displayPapers(); // Ponovo prikaži radove
+    });
+
+    // Fetch podaci sa servera
+    fetch(`/get_gene_papers?gene_name=${geneName}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.pubmed_links && data.pubmed_links.length > 0) {
+                allPapers = data.pubmed_links;
+                visiblePapers = 3; // Resetuj početni broj prikazanih radova
+                displayPapers();
+            } else {
+                sidebarContent.innerHTML = "<p>No related papers found.</p>";
+            }
+        })
+        .catch(error => console.error("Error fetching data:", error));
 }
 
 

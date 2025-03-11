@@ -61,6 +61,19 @@ html {
     z-index: 1000;
 }
 
+#loadMoreBtn{
+    background-color: #FF5722;
+    color: white;
+    border: none;
+    margin-top: 2%;
+    padding: 10px 20px;
+    display: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1000;
+}
+
+
 
 #sidebar {
     position: fixed;

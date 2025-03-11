@@ -1,3 +1,7 @@
+from pprint import pprint
+
+import fprint
+import requests
 from flask import Flask, jsonify, render_template, request
 import pandas as pd
 import numpy as np
@@ -6,8 +10,55 @@ from utils.excel_utils import read_excel_data
 from flask_cors import CORS
 
 app = Flask(__name__)
-
 CORS(app)
+MYGENE_API_BASE = "https://mygene.info/v3"
+
+
+@app.route("/get_gene_papers", methods=["GET"])
+def get_gene_papers():
+    gene_name = request.args.get("gene_name")
+
+    if not gene_name:
+        return jsonify({"error": "Gene name is required"}), 400
+
+    # 1. Pronaći ID gena
+    try:
+        response = requests.get(f"{MYGENE_API_BASE}/query?q=symbol:{gene_name}")
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to fetch gene ID: {str(e)}"}), 500
+
+    if not data.get("hits"):
+        return jsonify({"error": "Gene not found"}), 404
+
+    gene_id = data["hits"][0]["_id"]
+
+    # 2. Dohvatiti podatke o genu pomoću ID-ja
+    try:
+        response = requests.get(f"{MYGENE_API_BASE}/gene/{gene_id}")
+        response.raise_for_status()
+        gene_data = response.json()
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to fetch gene info: {str(e)}"}), 500
+
+
+    # 3. Ekstraktovati samo PubMed ID-jeve
+    pubmed_ids = set()
+    # Iz `generif`
+    if "generif" in gene_data:
+        for entry in gene_data["generif"]:
+            if "pubmed" in entry:
+                pubmed_ids.add(entry["pubmed"])
+
+
+    # 4. Kreirati PubMed linkove
+    pubmed_links = [f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}/" for pubmed_id in pubmed_ids]
+
+    return jsonify({"gene_name": gene_name, "pubmed_links": pubmed_links})
+
+
+
 
 # Route for generating the 3D volcano plot data
 @app.route('/plot_data')
