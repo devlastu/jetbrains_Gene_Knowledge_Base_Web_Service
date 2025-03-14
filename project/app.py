@@ -73,7 +73,6 @@ def plot_data():
 
         # Računanje -log10 za adj.P.Val
         s4b_data['-log10(adj.P.Val)'] = -np.log10(s4b_data['adj.P.Val'])
-        s4b_data['Z_value'] = 0  # Z-axis is fixed at 0 for now
         s4b_data['Z_value'] = np.random.uniform(-3, 3, len(s4b_data))
 
         # Ekstrakcija podataka koji su potrebni za 3D plot

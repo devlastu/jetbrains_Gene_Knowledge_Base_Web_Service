@@ -116,7 +116,7 @@ function fetchProteinConcentrationData(geneName) {
 // Funkcija za određivanje boje na osnovu vrednosti
 function getColor(value, min, max) {
 
-    const colors = ['#522258', '#8C3061', '#C63C51', '#d3904b', '#D97759FF', '#D99359FF', '#D3904BFF'];
+    const colors = ['#522258', '#8C3061', '#C63C51', '#D3904BFF', '#D97759FF', '#D99359FF', '#D3904BFF'];
     const mid = (min + max) / 2;
     const range1 = mid / 9 - min;
     const range2 = max - mid;
@@ -345,9 +345,6 @@ function create2DPlot(data) {
         });
     });
 }
-
-
-
 
 // Funkcija za kreiranje 2D plot-a
 function createProteinPLot(data) {
