@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "camera-controls": "^2.10.0"
+    "camera-controls": "^2.10.0",
+    "gsap": "^3.12.7"
   }
 }

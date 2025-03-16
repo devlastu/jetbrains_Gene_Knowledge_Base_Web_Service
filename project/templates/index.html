@@ -6,6 +6,8 @@
     <title>Gene Knowledge Base - Volcano Plot</title>
     <!-- Add Plotly.js CDN -->
     <script src='https://cdn.plot.ly/plotly-3.0.0.min.js'></script>
+    <!-- Add GSAP from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js"></script>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script type="importmap">
@@ -13,7 +15,8 @@
         "imports": {
           "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
           "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
-          "camera-controls": "https://cdn.jsdelivr.net/npm/camera-controls@1.34.2/dist/camera-controls.module.js"
+          "camera-controls": "https://cdn.jsdelivr.net/npm/camera-controls@1.34.2/dist/camera-controls.module.js",
+          "gsap": "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js"
         }
       }
     </script>
@@ -40,7 +43,7 @@
             <button id="loadMoreBtn"></button>
             <div id="sidebar-content"></div>
 
-            <button id="closeSidebar">Close</button>
+
         </div>
     </div>
 {#    <script src="{{ url_for('static', filename='js/index.js') }}"></script>#}

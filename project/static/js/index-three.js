@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import CameraControls from 'camera-controls';
 
+
+let is3D = true; // Početno stanje je 3D
 // Tooltip i osnovne promenljive
 const tooltip = document.getElementById('myDiv');
 const proteinPlot = document.getElementById('protein-plot');
@@ -215,10 +217,17 @@ function loadGenePapers(geneName) {
 function loadAndCreatePlot() {
     fetchData()
         .then(data => {
-            console.log("Fetched data:", data);
-            create2DPlot(data);
+            if(is3D){
+                create3DPlot(data);  // Kreiraj plot koristeći podatke
+            }else{
+                create2DPlot(data);
+            }
+
+            // simulateClickOnCenter();
         })
-        .catch(error => console.error("Error in loading or creating plot:", error));
+        .catch(error => {
+            console.error("Error in loading or creating plot:", error);
+        });
 }
 
 
@@ -236,6 +245,8 @@ let outlineMaterial = new THREE.MeshBasicMaterial({
 // Kreiranje 2D plot-a
 function create2DPlot(data) {
     console.log("create2DPlot data:", data);
+    clearScene();
+    resetTooltip();
 
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
@@ -247,7 +258,11 @@ function create2DPlot(data) {
     // Kreiramo tačke (spheres) na osnovu podataka
     for (let i = 0; i < data.x.length; i++) {
         let color = new THREE.Color(getColor(data.y[i], minValue, maxValue)); // Određivanje boje
-        const material = new THREE.MeshBasicMaterial({ color });
+        const material = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true, // Omogućava promenu opacity-a
+            opacity: 1,
+        });
 
         const sphere = new THREE.Mesh(geometry, material);
 
@@ -278,6 +293,86 @@ function create2DPlot(data) {
     tooltip.appendChild(renderer.domElement);
 }
 
+function clearScene() {
+    while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+    }
+    points = [];
+}
+
+function resetTooltip() {
+    const tooltip = document.getElementById("tooltip");
+    if (tooltip) {
+        tooltip.innerHTML = `
+            <div id="myDiv">
+                <button id="toggleButton">2D</button>
+                <button id="resetButton">Reset to Initial Position</button>
+                <div id="elem-info"></div>
+                <div id="sidebar">
+                    <h2>Information</h2>
+                    <div id="protein-plot"></div>
+                    <div id="scientific-paper"></div>
+                    <button id="loadMoreBtn"></button>
+                    <div id="sidebar-content"></div>
+<!--                    <button id="closeSidebar">Close</button>-->
+                </div>
+            </div>
+        `;
+    }
+}
+
+function create3DPlot(data) {
+    console.log("create3DPlot data:", data);
+
+    clearScene();
+    resetTooltip();
+
+    const minValue = Math.min(...data.y);
+    const maxValue = Math.max(...data.y);
+    console.log(maxValue);
+    const geometry = new THREE.SphereGeometry(0.08, 32, 16);
+    points = [];
+    const outlines = [];
+
+    // Kreiramo tačke (spheres) na osnovu podataka
+    for (let i = 0; i < data.x.length; i++) {
+        let color = new THREE.Color(getColor(data.y[i], minValue, maxValue));
+        const material = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true, // Omogućava promenu opacity-a
+            opacity: 1,
+        });
+        const sphere = new THREE.Mesh(geometry, material);
+
+        // Skaliramo x i y vrednosti sa faktorom 10 i 5, a Z koordinatu nasumično biramo između 1 i 10
+        sphere.position.set(
+            data.x[i] * 10 + Math.random() * 0.5,
+            data.y[i] * 5 - 20 + Math.random() * 0.5,
+            Math.random() * 9 + 1 // Z u rasponu od 1 do 10
+        );
+
+        // Kreiraj outline
+        const outlineSphere = new THREE.Mesh(geometry, outlineMaterial);
+        outlineSphere.scale.set(1.2, 1.2, 1.2);
+        outlineSphere.position.copy(sphere.position);
+        scene.add(outlineSphere);
+        outlines.push(outlineSphere);
+
+        // Dodaj originalnu loptu
+        scene.add(sphere);
+        points.push(sphere);
+
+        // Dodaj geneName (ili drugi relevantni podaci) kao svojstvo na svakom objektu
+        sphere.geneName = data.geneNames[i];
+    }
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    tooltip.appendChild(renderer.domElement);
+}
+
+
 
 function onMouseMove(event) {
     mousePointer = getMouseVector2(event, window);
@@ -303,10 +398,12 @@ function onClick(event) {
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
     console.log("Inter in click:", intersections);
     // Ako postoji kliknut objekat, uzmi ga
-    if (intersections !== []) {
+    console.log(intersections);
+    if (intersections.object) {
         console.log("Mama draga");
         const clickedObject = intersections.object;
         console.log("Clicked object:", clickedObject);
+        zoomToElement(clickedObject, true);  // Enable smooth transition
         let geneName = clickedObject.geneName;  // Assuming geneName is inside metadata
         console.log(geneName); // Log geneName
         // Ako je kliknuta tačka, prikazuj podatke o gene-u ili bilo šta drugo što trebaš
@@ -405,46 +502,69 @@ export function getSphereElements(objectList) {
     return meshElements;
 }
 
-function highlightSphereElements(elementList) {
-    // Reset previous highlights
+
+function zoomToElement(targetElement, enableTransition) {
+    if (!targetElement) return;
+
+    // Check if the target element has a bounding box
+    const boundingBox = new THREE.Box3().setFromObject(targetElement);
+
+    // Use the cameraControls.fitToBox method to zoom to the target element
+    cameraControls.fitToBox(boundingBox, enableTransition, {
+        cover: false, // Set to false to prevent the camera from fully filling the screen with the element
+        paddingTop: 0.2, // Optional: Add a little padding to the top
+        paddingLeft: 0.2, // Optional: Add a little padding to the left
+        paddingBottom: 0.2, // Optional: Add a little padding to the bottom
+        paddingRight: 0.2 // Optional: Add a little padding to the right
+    }).then(() => {
+        console.log("Zoom to element completed!");
+    }).catch((error) => {
+        console.error("Error in zoomToElement:", error);
+    });
+}
+
+
+
+function highlightSphereElements(selectedElement) {
+
+    // Reset opacity and remove outlines for all points
     points.forEach((point) => {
         if (point.material) {
             point.material.transparent = true;
-            point.material.opacity = 1.0;
+            point.material.opacity = 0.5;
 
-            // Reset outline if it exists
-            if (point.outline) {
-                scene.remove(point.outline);
-                point.outline = null;
-            }
+
         }
     });
 
-    elementList.forEach((element) => {
-        if (element && element.material) {
-            // Set reduced opacity for highlighting
-            element.material.transparent = true;
-            element.material.opacity = 0.5;
+    // Ensure selectedElement is valid
+    console.log(selectedElement[0]);
+    selectedElement = selectedElement[0];
+    if (selectedElement instanceof THREE.Mesh && selectedElement.material) {
+        selectedElement.material.transparent = true;
+        selectedElement.material.opacity = 1.0;
+        console.log("Selected element material:", selectedElement.material);
 
-            // // Create outline effect
-            // const outlineMaterial = new THREE.MeshBasicMaterial({
-            //     color: 0xffffff, // White outline
-            //     side: THREE.BackSide,
-            // });
-            //
-            // const outlineMesh = new THREE.Mesh(element.geometry, outlineMaterial);
-            // outlineMesh.scale.multiplyScalar(1.05); // Slightly enlarge outline
-            // element.outline = outlineMesh;
-            // scene.add(outlineMesh);
 
-            // Show tooltip with geneName when hovering
-            if (element.geneName) {
-                const screenPosition = projectToScreen(element.position, camera);
-                showTooltip(element.position.x, element.position.y, element.geneName, screenPosition.x, screenPosition.y);
-            }
+
+        // Show tooltip
+        if (selectedElement.geneName) {
+            const screenPosition = projectToScreen(selectedElement.position, camera);
+            showTooltip(
+                selectedElement.position.x,
+                selectedElement.position.y,
+                selectedElement.geneName,
+                screenPosition.x,
+                screenPosition.y
+            );
         }
-    });
+
+    } else {
+        console.warn("Selected element is not a valid THREE.Mesh object.");
+    }
 }
+
+
 
 
 
@@ -510,4 +630,17 @@ function getColor(value, minValue, maxValue) {
 // Pokretanje aplikacije
 window.addEventListener("DOMContentLoaded", () => {
     init();
+    const toggleButton = document.getElementById("toggleButton");
+    toggleButton.textContent = "2D"; // Dugme počinje s natpisom '2D'
+
+    toggleButton.addEventListener("click", function () {
+        if (is3D) {
+            loadAndCreatePlot();
+            toggleButton.textContent = "3D"; // Kada je u 2D modu, dugme treba da kaže '3D'
+        } else {
+            loadAndCreatePlot();
+            toggleButton.textContent = "2D"; // Kada je u 3D modu, dugme treba da kaže '2D'
+        }
+        is3D = !is3D; // Obrće stanje prikaza
+    });
 });
