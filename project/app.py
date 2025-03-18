@@ -149,7 +149,7 @@ def index():
 
 @app.route('/test-page')
 def test_page():
-    return render_template('test.html')
+    return render_template('protein-look.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
