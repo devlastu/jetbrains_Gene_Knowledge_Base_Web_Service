@@ -11,21 +11,29 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
-          "camera-controls": "https://cdn.jsdelivr.net/npm/camera-controls@1.34.2/dist/camera-controls.module.js",
-          "gsap": "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js"
+        {
+          "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+            "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.webgpu.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
+            "camera-controls": "https://cdn.jsdelivr.net/npm/camera-controls@1.34.2/dist/camera-controls.module.js",
+            "gsap": "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.1/gsap.min.js",
+            "dat.gui": "https://cdn.jsdelivr.net/npm/dat.gui@0.7.9/build/dat.gui.module.js"
+          }
         }
-      }
     </script>
+
+
+
 
 </head>
 <body>
 
     <div id="loader" style="display: none;">Loading...</div>
-
+    <button id="testButton">
+        Test Page
+    </button>
     <div id="myDiv">
         <button id="toggleButton">2D</button>
         <button id="resetButton">

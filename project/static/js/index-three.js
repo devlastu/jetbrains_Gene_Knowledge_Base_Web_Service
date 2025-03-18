@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import CameraControls from 'camera-controls';
 
 
+
+
+
+
+
+CameraControls.install({ THREE: THREE });
+
 let is3D = true; // Početno stanje je 3D
 // Tooltip i osnovne promenljive
 const tooltip = document.getElementById('myDiv');
@@ -10,9 +17,16 @@ let scene, camera, renderer, cameraControls, raycaster, mouse, points, mousePoin
 // Kreiraj novi tooltip element
 const info = document.getElementById("elem-info");
 // Omogućavanje CameraControls
-CameraControls.install({ THREE: THREE });
-let intersections = []
 
+let intersections = []
+let selectedObject = null;
+let originalColor = new THREE.Color();
+
+// Global variable for initial camera and target positions
+const initialCameraConfig = {
+    position: new THREE.Vector3(0, 0, 150),
+    target: new THREE.Vector3(0, 0, 0)
+};
 
 function init() {
     scene = new THREE.Scene();
@@ -22,20 +36,26 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     tooltip.appendChild(renderer.domElement);
 
+    // Initialize the camera with the initial position
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, -30);
+    camera.position.copy(initialCameraConfig.position);
+
     // Add listener to call onMouseMove every time the mouse moves in the browser window
     document.addEventListener('mousemove', onMouseMove, false);
     document.addEventListener('click', onClick, false); // Dodajemo event listener za click
 
     console.log("Scene and camera initialized:", scene, camera); // Check initialization
 
-
     // Inicijalizacija CameraControls
     cameraControls = new CameraControls(camera, renderer.domElement);
     cameraControls.dollyToCursor = true;
-    cameraControls.setLookAt(0, 0, -30, 0, 0, 0); // Početna pozicija i fokus
 
+    // Use the global variable to set the initial look-at configuration
+    cameraControls.setLookAt(
+        initialCameraConfig.position.x, initialCameraConfig.position.y, initialCameraConfig.position.z,
+        initialCameraConfig.target.x, initialCameraConfig.target.y, initialCameraConfig.target.z
+    );
+    window.addEventListener( 'resize', onWindowResize );
     loadAndCreatePlot();
     animate();
 }
@@ -232,15 +252,34 @@ function loadAndCreatePlot() {
 
 
 
+function lightenColor(material, factor = 0.2) {
+    const color = new THREE.Color(material.color);
+    color.offsetHSL(0, 0, factor); // Povećava svetlinu
+    material.color.set(color);
+}
+
+function restoreOriginalColor() {
+    if (selectedObject) {
+        selectedObject.material.color.set(originalColor); // Vrati staru boju
+        selectedObject = null;
+    }
+}
+
+function dimOtherElements(scene, selectedObject, dimOpacity = 0.3, originalOpacity = 1) {
+    scene.traverse((object) => {
+        if (object.isMesh && object.material) {
+            if (object === selectedObject) {
+                object.material.opacity = originalOpacity; // Ostavlja kliknuti objekat nepromenjen
+            } else {
+                object.material.opacity = dimOpacity; // Smanjuje opacity za sve ostale
+            }
+        }
+    });
+}
 
 
 
-let outlineMaterial = new THREE.MeshBasicMaterial({
-    color: 0x0000, // Outline color (green)
-    side: THREE.BackSide, // To create an outline effect
-    opacity: 0.5, // Make outline semi-transparent
-    transparent: true
-});
+
 
 // Kreiranje 2D plot-a
 function create2DPlot(data) {
@@ -251,7 +290,7 @@ function create2DPlot(data) {
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
     console.log(maxValue);
-    const geometry = new THREE.SphereGeometry(0.08, 32, 16); // Koristi istu veličinu loptica kao u prvom primeru
+    const geometry = new THREE.SphereGeometry(0.2, 32, 16); // Koristi istu veličinu loptica kao u prvom primeru
     points = [];
     const outlines = [];
 
@@ -268,16 +307,16 @@ function create2DPlot(data) {
 
         // Skaliramo x i y vrednosti sa faktorom 10
         // Dodaj malu random varijaciju za razdvajanje tačaka
-        sphere.position.set(data.x[i] * 10 + Math.random() * 0.5, data.y[i] * 5 - 20 + Math.random() * 0.5, 0);
+        sphere.position.set(data.x[i] * 50 + Math.random() * 0.5, data.y[i] * 20 - 60 + Math.random() * 0.5, 0);
 
-        // Kreiraj outline
-        const outlineSphere = new THREE.Mesh(geometry, outlineMaterial);
-        outlineSphere.scale.set(1.2, 1.2, 1.2); // Povećaj outline za 20%
-
-        // Dodaj outline na istu poziciju
-        outlineSphere.position.copy(sphere.position);
-        scene.add(outlineSphere);
-        outlines.push(outlineSphere);
+        // // Kreiraj outline
+        // const outlineSphere = new THREE.Mesh(geometry, outlineMaterial);
+        // outlineSphere.scale.set(1.2, 1.2, 1.2); // Povećaj outline za 20%
+        //
+        // // Dodaj outline na istu poziciju
+        // outlineSphere.position.copy(sphere.position);
+        // scene.add(outlineSphere);
+        // outlines.push(outlineSphere);
 
         // Dodaj originalnu loptu
         scene.add(sphere);
@@ -321,56 +360,52 @@ function resetTooltip() {
     }
 }
 
+
+
 function create3DPlot(data) {
-    console.log("create3DPlot data:", data);
+  console.log("create3DPlot data:", data);
 
-    clearScene();
-    resetTooltip();
+  clearScene();
+  resetTooltip();
 
-    const minValue = Math.min(...data.y);
-    const maxValue = Math.max(...data.y);
-    console.log(maxValue);
-    const geometry = new THREE.SphereGeometry(0.08, 32, 16);
-    points = [];
-    const outlines = [];
+  const minValue = Math.min(...data.y);
+  const maxValue = Math.max(...data.y);
+  console.log(maxValue);
 
-    // Kreiramo tačke (spheres) na osnovu podataka
-    for (let i = 0; i < data.x.length; i++) {
-        let color = new THREE.Color(getColor(data.y[i], minValue, maxValue));
-        const material = new THREE.MeshBasicMaterial({
-            color,
-            transparent: true, // Omogućava promenu opacity-a
-            opacity: 1,
-        });
-        const sphere = new THREE.Mesh(geometry, material);
+  points = [];
 
-        // Skaliramo x i y vrednosti sa faktorom 10 i 5, a Z koordinatu nasumično biramo između 1 i 10
-        sphere.position.set(
-            data.x[i] * 10 + Math.random() * 0.5,
-            data.y[i] * 5 - 20 + Math.random() * 0.5,
-            Math.random() * 9 + 1 // Z u rasponu od 1 do 10
-        );
+  for (let i = 0; i < data.x.length; i++) {
+    let color = new THREE.Color(getColor(data.y[i], minValue, maxValue));
+    let scaleFactor = getScaledSize(data.y[i], minValue, maxValue);
+    // Kreiramo geometriju direktno  bez pozivanja createBubble
+    let geometry = new THREE.SphereGeometry(scaleFactor, 64, 32);
 
-        // Kreiraj outline
-        const outlineSphere = new THREE.Mesh(geometry, outlineMaterial);
-        outlineSphere.scale.set(1.2, 1.2, 1.2);
-        outlineSphere.position.copy(sphere.position);
-        scene.add(outlineSphere);
-        outlines.push(outlineSphere);
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 1,
+    });
 
-        // Dodaj originalnu loptu
-        scene.add(sphere);
-        points.push(sphere);
+    const sphere = new THREE.Mesh(geometry, material);
 
-        // Dodaj geneName (ili drugi relevantni podaci) kao svojstvo na svakom objektu
-        sphere.geneName = data.geneNames[i];
-    }
+    sphere.position.set(
+      data.x[i] * 50 + Math.random() * 2,
+      data.y[i] * 12 - 40,
+      Math.random() * 50
+    );
 
-    raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2();
+    scene.add(sphere);
+    points.push(sphere);
 
-    tooltip.appendChild(renderer.domElement);
+    sphere.geneName = data.geneNames[i];
+  }
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  tooltip.appendChild(renderer.domElement);
 }
+
 
 
 
@@ -393,20 +428,34 @@ function onClick(event) {
     // Prvo, izračunaj poziciju miša u normalizovanim koordinatama uređaja (-1 do 1)
     mousePointer = getMouseVector2(event, window);
 
-
     // Proveri da li postoji intersekcija između miša i objekata u sceni
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
+
     console.log("Inter in click:", intersections);
-    // Ako postoji kliknut objekat, uzmi ga
-    console.log(intersections);
+
     if (intersections.object) {
         console.log("Mama draga");
         const clickedObject = intersections.object;
         console.log("Clicked object:", clickedObject);
-        zoomToElement(clickedObject, true);  // Enable smooth transition
+
+        // Ako je prethodno bio selektovan objekat, vrati mu originalnu boju
+        restoreOriginalColor();
+
+        // Sačuvaj originalnu boju novog selektovanog objekta
+        selectedObject = clickedObject;
+        originalColor.copy(selectedObject.material.color);
+
+        // Osvetli selektovani objekat
+        lightenColor(selectedObject.material);
+        dimOtherElements(scene, clickedObject);
+
+        zoomToElement(clickedObject, true); // Enable smooth transition
+
         let geneName = clickedObject.geneName;  // Assuming geneName is inside metadata
         console.log(geneName); // Log geneName
-        // Ako je kliknuta tačka, prikazuj podatke o gene-u ili bilo šta drugo što trebaš
+
+
+        // Ako je kliknut element sa podacima o genu
         if (geneName) {
             fetchProteinConcentrationData(geneName)
                 .then(proteinData => {
@@ -424,12 +473,11 @@ function onClick(event) {
                     console.error("Error fetching protein concentration data:", error);
                 });
 
-
             function fillInData(proteinData) {
                 const infoContainer = document.getElementById("sidebar-content");
 
                 if (proteinData && proteinData.additionalInfo) {
-                    infoContainer.innerHTML = `
+                    infoContainer.innerHTML = `  
                         <h3>Protein Information for Gene: ${proteinData.additionalInfo.EntrezGeneSymbol}</h3>
                         <p><strong>Gene Name:</strong> ${proteinData.additionalInfo.TargetFullName}</p>
                         <p><strong>Target:</strong> ${proteinData.additionalInfo.Target}</p>
@@ -438,15 +486,23 @@ function onClick(event) {
                         <p><strong>Units:</strong> ${proteinData.additionalInfo.Units}</p>
                         <p><strong>Type:</strong> ${proteinData.additionalInfo.Type}</p>
                         <p><strong>Dilution:</strong> ${proteinData.additionalInfo.Dilution}</p>
-                        <h4>Protein Concentration (Young vs Old Donors)</h4>
+                       
                     `;
                 } else {
                     console.error("Protein data is missing or malformed.");
                 }
-            } // Ova funkcija može prikazivati podatke
+            }
         }
+    } else {
+        // Ako je kliknuto izvan objekta, vrati originalnu boju prethodnog objekta
+        restoreOriginalColor();
     }
 }
+
+
+
+
+
 
 
 
@@ -512,10 +568,10 @@ function zoomToElement(targetElement, enableTransition) {
     // Use the cameraControls.fitToBox method to zoom to the target element
     cameraControls.fitToBox(boundingBox, enableTransition, {
         cover: false, // Set to false to prevent the camera from fully filling the screen with the element
-        paddingTop: 0.2, // Optional: Add a little padding to the top
-        paddingLeft: 0.2, // Optional: Add a little padding to the left
-        paddingBottom: 0.2, // Optional: Add a little padding to the bottom
-        paddingRight: 0.2 // Optional: Add a little padding to the right
+        paddingTop: 2, // Optional: Add a little padding to the top
+        paddingLeft: 2, // Optional: Add a little padding to the left
+        paddingBottom:2, // Optional: Add a little padding to the bottom
+        paddingRight: 2 // Optional: Add a little padding to the right
     }).then(() => {
         console.log("Zoom to element completed!");
     }).catch((error) => {
@@ -527,23 +583,11 @@ function zoomToElement(targetElement, enableTransition) {
 
 function highlightSphereElements(selectedElement) {
 
-    // Reset opacity and remove outlines for all points
-    points.forEach((point) => {
-        if (point.material) {
-            point.material.transparent = true;
-            point.material.opacity = 0.5;
-
-
-        }
-    });
-
     // Ensure selectedElement is valid
     console.log(selectedElement[0]);
     selectedElement = selectedElement[0];
-    if (selectedElement instanceof THREE.Mesh && selectedElement.material) {
-        selectedElement.material.transparent = true;
-        selectedElement.material.opacity = 1.0;
-        console.log("Selected element material:", selectedElement.material);
+    if (selectedElement) {
+
 
 
 
@@ -627,11 +671,36 @@ function getColor(value, minValue, maxValue) {
     }
 }
 
+function getScaledSize(value, minValue, maxValue) {
+    const midThreshold = minValue + (maxValue - minValue) * 0.5; // 80% tačke vrednosti
+
+    if (value <= midThreshold) {
+        // Prvih 80% ide od 0.08 do 0.8
+        return 0.08 + ((value - minValue) / (midThreshold - minValue)) * (1.5 - 0.08);
+    } else {
+        // Preostalih 20% ide od 0.8 do 3, ali ako pređe 20, postavi ga na 20
+        const size = 0.8 + ((value - midThreshold) / (maxValue - midThreshold)) * (12 - 0.8);
+        return Math.min(size, 20); // Ova linija postavlja maksimalnu veličinu na 20
+    }
+}
+
+function onWindowResize() {
+
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize( window.innerWidth, window.innerHeight );
+
+}
+
+
+
 // Pokretanje aplikacije
 window.addEventListener("DOMContentLoaded", () => {
     init();
     const toggleButton = document.getElementById("toggleButton");
     toggleButton.textContent = "2D"; // Dugme počinje s natpisom '2D'
+    const testPageButton = document.getElementById("testButton");
 
     toggleButton.addEventListener("click", function () {
         if (is3D) {
@@ -642,5 +711,10 @@ window.addEventListener("DOMContentLoaded", () => {
             toggleButton.textContent = "2D"; // Kada je u 3D modu, dugme treba da kaže '2D'
         }
         is3D = !is3D; // Obrće stanje prikaza
+    });
+
+    // Dodajemo event listener za dugme
+    testPageButton.addEventListener('click', function() {
+        window.location.href =  '/test-page'; // Pozivamo Flask rutu koja vodi do test.html
     });
 });

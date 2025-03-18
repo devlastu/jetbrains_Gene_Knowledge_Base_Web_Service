@@ -147,5 +147,9 @@ def protein_concentration_data():
 def index():
     return render_template('index.html')
 
+@app.route('/test-page')
+def test_page():
+    return render_template('test.html')
+
 if __name__ == '__main__':
     app.run(debug=True)

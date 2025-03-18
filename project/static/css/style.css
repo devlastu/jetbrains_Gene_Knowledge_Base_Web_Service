@@ -63,6 +63,19 @@ canvas[data-engine="three.js r153"] {
     z-index: 1000;
 }
 
+#testButton{
+    position: fixed;
+    top: 20px;
+    right: 80%;
+    padding: 10px 20px;
+    background-color: #FF5722;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1000;
+}
+
 #toggleButton{
     position: fixed;
     top: 20px;
