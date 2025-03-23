@@ -13,14 +13,26 @@ let is3D = true; // Početno stanje je 3D
 // Tooltip i osnovne promenljive
 const tooltip = document.getElementById('myDiv');
 const proteinPlot = document.getElementById('protein-plot');
+
+// Create the invisible element
+let invisibleTargetElement;
 let scene, camera, renderer, cameraControls, raycaster, mouse, points, mousePointer;
 // Kreiraj novi tooltip element
 const info = document.getElementById("elem-info");
 // Omogućavanje CameraControls
-
+const closeButton = document.getElementById("close-info");
 let intersections = []
 let selectedObject = null;
 let originalColor = new THREE.Color();
+const infoContainer = document.getElementById("sidebar-content");
+const scientificContainer = document.getElementById("scientific-paper");
+let loadMoreBtn = document.getElementById("loadMoreBtn");
+let resetBtn = document.getElementById("resetButton");
+let plotData = JSON.parse(localStorage.getItem('plotData'));
+const showMoreBtn = document.getElementById('moreImportantBtn');
+const basicInfo = document.getElementById('important-genes');
+let isRotating = true; // Flag koji kontroliše rotaciju
+let sceneGroup; // Grupa koja sadrži sve objekte u sceni
 
 // Global variable for initial camera and target positions
 const initialCameraConfig = {
@@ -28,18 +40,53 @@ const initialCameraConfig = {
     target: new THREE.Vector3(0, 0, 0)
 };
 
+
+
+// Create an invisible object at the initial camera position
+function createInvisibleTargetElement() {
+    const geometry = new THREE.SphereGeometry(1); // Small sphere to act as the target (you can use any geometry)
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0, transparent: true }); // Invisible material
+    const invisibleElement = new THREE.Mesh(geometry, material);
+
+    // Set the position of the invisible element to match the initial camera position
+    invisibleElement.position.copy(initialCameraConfig.position);
+
+    // Add the invisible element to the scene (assuming you have a scene variable)
+    scene.add(invisibleElement);
+
+    return invisibleElement;
+}
+
+
+function resetCamera() {
+    zoomToElement(invisibleTargetElement, true)
+    resetLook();
+}
+
+function resetLook(){
+    cameraControls.setLookAt(
+        initialCameraConfig.position.x, initialCameraConfig.position.y, initialCameraConfig.position.z,
+        initialCameraConfig.target.x, initialCameraConfig.target.y, initialCameraConfig.target.z,
+        true
+    );
+}
+
+
 function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
+
 
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
     tooltip.appendChild(renderer.domElement);
 
+
+
     // Initialize the camera with the initial position
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.copy(initialCameraConfig.position);
-
+    resetBtn.addEventListener("click", closeFunction);
     // Add listener to call onMouseMove every time the mouse moves in the browser window
     document.addEventListener('mousemove', onMouseMove, false);
     document.addEventListener('click', onClick, false); // Dodajemo event listener za click
@@ -57,13 +104,27 @@ function init() {
     );
     window.addEventListener( 'resize', onWindowResize );
     loadAndCreatePlot();
+    invisibleTargetElement = createInvisibleTargetElement()
     animate();
+
+    // Dodavanje event listenera za dugme "More" i "Less"
+    showMoreBtn.addEventListener('click', toggleMoreLess);
+    // Pozovi funkciju sa listom gena iz localStorage
+    if (plotData && plotData.important) {
+        displayImportantGenes(plotData.important, 0, 7);
+    } else {
+        console.error("Nema podataka za gene u localStorage.");
+    }
 }
 
 // Animacija sa CameraControls
 function animate() {
     requestAnimationFrame(animate);
 
+      // Ako je rotacija omogućena, rotiraj scenu
+    if (isRotating) {
+        scene.rotation.y += 0.001; // Brzina rotacije
+    }
     const delta = clock.getDelta();
     cameraControls.update(delta); // Ažurira kontrole kamere
 
@@ -76,6 +137,12 @@ const clock = new THREE.Clock(); // Za CameraControls update
 function fetchData() {
     return fetch('http://127.0.0.1:5000/plot_data')
         .then(response => response.json())
+        .then(data => {
+            // Sačuvaj podatke u local storage
+            localStorage.setItem('plotData', JSON.stringify(data));
+            console.log("Podaci su sačuvani u local storage.");
+            return data; // Vrati podatke za dalju obradu
+        })
         .catch(error => console.error("Error fetching plot data:", error));
 }
 
@@ -88,6 +155,7 @@ function fetchProteinConcentrationData(geneName) {
                 young: data.youngDonors,
                 old: data.oldDonors,
                 additionalInfo: data.additionalInfo,
+                expressionInfo: data.expressionInfo
             };
             })
         .catch(error => {
@@ -95,6 +163,176 @@ function fetchProteinConcentrationData(geneName) {
             throw error;
         });
 }
+
+function displayImportantGenes(genes, start, end) {
+    const genesListContainer = document.getElementById('genes-list');
+    genesListContainer.innerHTML = '';  // Očisti prethodni sadržaj
+    const slice = genes.slice(start, end);
+    // Iteriraj kroz listu gena
+    slice.forEach(gene => {
+        console.log(gene);
+
+        // Provera da li su vrednosti definisane i da li su brojevi
+        const logFC = (typeof gene.logFC === 'number' && !isNaN(gene.logFC)) ? gene.logFC.toFixed(2) : 'N/A';
+        const adjPVal = (typeof gene['adj.P.Val'] === 'number' && !isNaN(gene['adj.P.Val'])) ? gene['adj.P.Val'].toFixed(2) : 'N/A';
+
+        // Kreiraj div za svaki gen
+        const geneDiv = document.createElement('div');
+        geneDiv.classList.add('gene-item');
+
+        // Kreiraj div za geneSymbol
+        const geneSymbolDiv = document.createElement('div');
+        geneSymbolDiv.classList.add('gene-symbol');
+        geneSymbolDiv.textContent = gene.geneSymbol;
+
+        // Kreiraj div za logFC
+        const logFCDiv = document.createElement('div');
+        logFCDiv.classList.add('logFC');
+        logFCDiv.textContent = logFC;
+        // Dodaj crvenu boju ako je logFC manji od 0, zelenu ako je veći od 0
+        if (parseFloat(logFC) < 0) {
+            logFCDiv.style.color = '#ae1c1c';
+        } else if (parseFloat(logFC) > 0) {
+            logFCDiv.style.color = '#5f983f';
+        }
+
+        // Kreiraj div za adj.P.Val
+        const adjPValDiv = document.createElement('div');
+        adjPValDiv.classList.add('adjPVal');
+        adjPValDiv.textContent = adjPVal;
+
+        // Dodaj crvenu boju ako je adj.P.Val manji od 0, zelenu ako je veći od 0
+        if (parseFloat(adjPVal) < 0) {
+            adjPValDiv.style.color = '#ae1c1c';
+        } else if (parseFloat(adjPVal) > 0) {
+            adjPValDiv.style.color = '#5f983f';
+        }
+
+        // Dodaj sve divove u geneDiv
+        geneDiv.appendChild(geneSymbolDiv);
+        geneDiv.appendChild(logFCDiv);
+        geneDiv.appendChild(adjPValDiv);
+
+        // Dodaj event listener za klik
+        geneDiv.addEventListener('click', function(event) {
+            event.preventDefault();
+            alert(`Kliknuli ste na gen: ${gene.geneSymbol}`);
+        });
+
+        // Dodaj geneDiv u container
+        genesListContainer.appendChild(geneDiv);
+    });
+}
+
+function onGeneSelection(geneName) {
+  // Pronalaženje podataka o genu u localStorage
+  const geneData = JSON.parse(localStorage.getItem(geneName));
+
+  if (geneData) {
+    // Pronađi odgovarajući objekat u listi 'points' koristeći geneName
+    let selectedObject = null;
+    for (let i = 0; i < points.length; i++) {
+      if (points[i].geneName === geneName) {
+        selectedObject = points[i];
+        break;
+      }
+    }
+
+    if (selectedObject) {
+      // Ako je objekat pronađen, nastavite sa obradom
+      restoreOriginalColor();
+      originalColor.copy(selectedObject.material.color);
+
+      lightenColor(selectedObject.material);
+      dimOtherElements(scene, selectedObject);
+      zoomToElement(selectedObject, true);
+
+      // Korišćenje podataka o genu (ako je potrebno)
+      console.log("Gene data:", geneData);
+      // Na primer, možete koristiti geneData za dalju obradu, kao što je pozivanje funkcije za dodatne podatke
+      fetchProteinConcentrationData(geneData.geneName)
+        .then(proteinData => {
+          if (proteinData.young && proteinData.old) {
+            loadGenePapers(geneData.geneName);
+            createProteinPlot(proteinData);
+            proteinPlot.setAttribute('style', 'display: block;');
+            fillInData(proteinData);
+            closeButton.classList.add("visible");
+          } else {
+            console.error("Error: Missing data for plotting.");
+          }
+        })
+        .catch(error => console.error("Error fetching protein concentration data:", error));
+    } else {
+      console.error("Gene object not found in the list.");
+    }
+  } else {
+    console.error("Gene data not found in localStorage.");
+  }
+}
+
+function fillInData(proteinData) {
+    if (proteinData && proteinData.additionalInfo) {
+        const additionalInfo = proteinData.additionalInfo;
+
+                infoContainer.innerHTML = `  
+                    <h2>🧬 Gene: ${additionalInfo.EntrezGeneSymbol}</h2>
+                    <p><strong>Full Name:</strong> ${additionalInfo.TargetFullName}</p>
+                    <p><strong>Target:</strong> ${additionalInfo.Target}</p>
+                    <p><strong>Gene ID:</strong> ${additionalInfo.EntrezGeneID}</p>
+                    <p><strong>Organism:</strong> ${additionalInfo.Organism}</p>
+                    
+                    <hr>  
+                    
+                    <h3>📊 Protein Concentration Data</h3>
+                    <p><strong>Units:</strong> ${additionalInfo.Units}</p>
+                    <p><strong>Type:</strong> ${additionalInfo.Type}</p>
+                    <p><strong>Dilution:</strong> ${additionalInfo.Dilution}</p>
+                    
+                    <hr>
+                `;
+        } else {
+            console.error("Protein data is missing or malformed.");
+        }
+}
+
+// Funkcija koja vraća indeks gena u listi
+function findGeneIndex(geneSymbol) {
+    return genes.findIndex(gene => gene.geneSymbol === geneSymbol);
+}
+
+
+
+// Funkcija koja upravlja dugmetom "More" i "Less"
+function toggleMoreLess() {
+    const showMoreBtn = document.getElementById('moreImportantBtn');
+    const genesListContainer = document.getElementById('genes-list');
+    const data = JSON.parse(localStorage.getItem('plotData'));  // Pretpostavljam da imate gene u localStorage
+    const genes = data['important'];
+
+    let start = 0;
+    let end = 7;
+
+    // Ako je trenutno prikazano "more indices", povećaj broj prikazanih gena
+    if (showMoreBtn.textContent === 'more indices') {
+        end = end + 7;
+        if (end > genes.length) {
+            end = genes.length;  // Kada nema više gena, prikaži sve
+            showMoreBtn.textContent = 'less indices';
+        }
+    } else {
+        // Ako je već kliknuto "less indices", prikaži prvih 7
+        start = 0;
+        end = 7;
+        showMoreBtn.textContent = 'more indices';  // Ponovo prikaži prvih 7
+    }
+
+    // Prikazivanje gena
+    displayImportantGenes(genes, start, end);
+}
+
+
+
 // Funkcija za kreiranje 2D plot-a
 function createProteinPLot(data) {
     // Osiguraj da podaci postoje
@@ -160,38 +398,41 @@ function createProteinPLot(data) {
 }
 
 function loadGenePapers(geneName) {
+
+    basicInfo.setAttribute('style', 'display:none');
     let allPapers = [];
     let visiblePapers = 3; // Početno prikazivanje 3 rada
 
     // Provera da li elementi postoje
-    const sidebarContent = document.getElementById("scientific-paper");
-    if (!sidebarContent) {
+
+    if (!scientificContainer) {
         console.error("Error: Element #scientific-paper not found.");
         return;
     }
 
     // Kreiraj "Show More" dugme ako ne postoji
-    let loadMoreBtn = document.getElementById("loadMoreBtn");
+
     if (!loadMoreBtn) {
         loadMoreBtn = document.createElement("button");
         loadMoreBtn.id = "loadMoreBtn";
         loadMoreBtn.innerText = "Show More";
         loadMoreBtn.style.marginTop = "10px";
-        sidebarContent.after(loadMoreBtn);
+        scientificContainer.after(loadMoreBtn);
     }
 
     // Funkcija za prikaz radova
     function displayPapers() {
-        sidebarContent.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
+        scientificContainer.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
 
         const list = document.createElement("ul");
         for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
             const item = document.createElement("li");
-            item.innerHTML = `<a href="${allPapers[i]}" target="_blank">PubMed link: ${allPapers[i]}</a>`;
+            item.innerHTML = `<a href="${allPapers[i]}" target="_blank" class="custom-link">PubMed link: ${allPapers[i]}</a>`;
             list.appendChild(item);
         }
 
-        sidebarContent.appendChild(list);
+
+        scientificContainer.appendChild(list);
 
         // Dodaj Show More dugme ako je potrebno
         if (visiblePapers < allPapers.length) {
@@ -203,13 +444,14 @@ function loadGenePapers(geneName) {
         }
 
         // Omogućiti skrolovanje unutar scientific-paper div-a
-        sidebarContent.style.maxHeight = "300px";
-        sidebarContent.style.overflowY = "auto";
+        scientificContainer.style.maxHeight = "300px";
+        scientificContainer.style.overflowY = "auto";
     }
 
     // Klik na Show More / Show Less
     loadMoreBtn.addEventListener("click", function () {
-        if (loadMoreBtn.innerText === "Show More") {
+
+        if (loadMoreBtn.innerText === "SHOW MORE") {
             visiblePapers = allPapers.length; // Učitaj sve radove
         } else {
             visiblePapers = 3; // Resetuj na 3 rada
@@ -221,10 +463,12 @@ function loadGenePapers(geneName) {
     fetch(`/get_gene_papers?gene_name=${geneName}`)
         .then(response => response.json())
         .then(data => {
-            if (data.pubmed_links && data.pubmed_links.length > 0) {
-                allPapers = data.pubmed_links;
+            console.log(data);
+            if (data.pubmed_papers && data.pubmed_papers.length > 0) {
+                allPapers = data.pubmed_papers;
+                console.log(allPapers);
                 visiblePapers = 3; // Resetuj početni broj prikazanih radova
-                displayPapers();
+                if(selectedObject)displayPapers();
             } else {
                 sidebarContent.innerHTML = "<p>No related papers found.</p>";
             }
@@ -277,6 +521,31 @@ function dimOtherElements(scene, selectedObject, dimOpacity = 0.3, originalOpaci
     });
 }
 
+function restoreAllColors(){
+    // Vratiti originalnu boju selektovanog objekta, ako postoji
+    if (selectedObject) {
+        selectedObject.material.color.set(originalColor); // Vraćanje originalne boje
+        selectedObject.material.opacity = 1; // Vraćanje opaciteta na originalno (1)
+        selectedObject = null; // Resetuj selektovani objekat
+    }
+
+    // Vratiti sve objekte u sceni u njihovo originalno stanje (boje i opaciteti)
+    scene.traverse((object) => {
+        if (object.isMesh && object.material) {
+            // Vratiti boju na originalnu
+            if (object.material.hasOwnProperty('originalColor')) {
+                object.material.color.set(object.material.originalColor); // Vrati originalnu boju objekta
+            }
+
+            // Vratiti opacitet na originalnu vrednost
+            if (object.material.hasOwnProperty('originalOpacity')) {
+                object.material.opacity = object.material.originalOpacity; // Vrati originalni opacitet
+            } else {
+                object.material.opacity = 1; // Ako nije postavljen originalni opacitet, postavi na 1
+            }
+        }
+    });
+}
 
 
 
@@ -286,6 +555,7 @@ function create2DPlot(data) {
     console.log("create2DPlot data:", data);
     clearScene();
     resetTooltip();
+    resetCamera()
 
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
@@ -367,6 +637,7 @@ function create3DPlot(data) {
 
   clearScene();
   resetTooltip();
+  resetCamera();
 
   const minValue = Math.min(...data.y);
   const maxValue = Math.max(...data.y);
@@ -374,10 +645,11 @@ function create3DPlot(data) {
 
   points = [];
 
+  // Loop through the data and create spheres for the plot
   for (let i = 0; i < data.x.length; i++) {
     let color = new THREE.Color(getColor(data.y[i], minValue, maxValue));
     let scaleFactor = getScaledSize(data.y[i], minValue, maxValue);
-    // Kreiramo geometriju direktno  bez pozivanja createBubble
+    // Create geometry for the sphere directly without calling createBubble
     let geometry = new THREE.SphereGeometry(scaleFactor, 64, 32);
 
     const material = new THREE.MeshBasicMaterial({
@@ -391,13 +663,29 @@ function create3DPlot(data) {
     sphere.position.set(
       data.x[i] * 50 + Math.random() * 2,
       data.y[i] * 12 - 40,
-      Math.random() * 50
+      Math.random() * 70
     );
 
     scene.add(sphere);
     points.push(sphere);
 
+
+    // Store the gene name and coordinates in localStorage
+    const geneData = {
+      geneName: data.geneNames[i],
+      position: {
+        x: sphere.position.x,
+        y: sphere.position.y,
+        z: sphere.position.z,
+      },
+      scale: scaleFactor,
+    };
+
+    // Add the gene data to localStorage (using gene name as the key)
+    localStorage.setItem(data.geneNames[i], JSON.stringify(geneData));
+    // Store the gene name on the sphere object
     sphere.geneName = data.geneNames[i];
+
   }
 
   raycaster = new THREE.Raycaster();
@@ -405,6 +693,7 @@ function create3DPlot(data) {
 
   tooltip.appendChild(renderer.domElement);
 }
+
 
 
 
@@ -423,81 +712,100 @@ function onMouseMove(event) {
     }
 }
 
+// Funkcija koja vraća sve u prethodno stanje
+function emptySidebar() {
+    // Vratiti originalnu boju prethodno selektovanog objekta
+    if (selectedObject) {
+        restoreOriginalColor(); // Vrati boju selektovanog objekta
+        selectedObject = null; // Resetuj selektovani objekat
+    }
 
+    // Sakrij sidebar sadržaj
+    infoContainer.innerHTML = ""; // Očisti informacije o genu
+
+    // Sakrij protein plot
+    proteinPlot.setAttribute('style', 'display: none;'); // Sakrij plot
+
+    //Sakrij papers
+    scientificContainer.innerHTML = '';
+
+    loadMoreBtn.setAttribute('style', 'display: none;');
+
+
+    // Sakrij dugme za zatvaranje
+    closeButton.classList.remove("visible");
+
+    console.log("All changes have been restored to their original state.");
+}
+
+
+let lastClickTime = 0;
+let mouseDownPos = { x: 0, y: 0 };
+let isDragging = false;
+
+// Detektujemo kada korisnik pritisne dugme miša
+window.addEventListener("mousedown", (event) => {
+    mouseDownPos = { x: event.clientX, y: event.clientY };
+    isDragging = false;
+});
+
+// Detektujemo kretanje miša da prepoznamo drag
+window.addEventListener("mousemove", (event) => {
+    const moveX = Math.abs(event.clientX - mouseDownPos.x);
+    const moveY = Math.abs(event.clientY - mouseDownPos.y);
+
+    if (moveX > 5 || moveY > 5) {
+        isDragging = true; // Ako je pomeraj veći od 5px, tretiramo ga kao drag
+    }
+});
+
+// Kada korisnik otpusti miš
 function onClick(event) {
-    // Prvo, izračunaj poziciju miša u normalizovanim koordinatama uređaja (-1 do 1)
-    mousePointer = getMouseVector2(event, window);
+    isRotating = false;
+    if (isDragging) return; // Ako je bio drag, ignoriši klik
 
-    // Proveri da li postoji intersekcija između miša i objekata u sceni
+    const currentTime = new Date().getTime();
+    const clickInterval = currentTime - lastClickTime;
+    lastClickTime = currentTime;
+
+    mousePointer = getMouseVector2(event, window);
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
 
-    console.log("Inter in click:", intersections);
-
     if (intersections.object) {
-        console.log("Mama draga");
         const clickedObject = intersections.object;
-        console.log("Clicked object:", clickedObject);
 
-        // Ako je prethodno bio selektovan objekat, vrati mu originalnu boju
         restoreOriginalColor();
-
-        // Sačuvaj originalnu boju novog selektovanog objekta
         selectedObject = clickedObject;
         originalColor.copy(selectedObject.material.color);
 
-        // Osvetli selektovani objekat
         lightenColor(selectedObject.material);
         dimOtherElements(scene, clickedObject);
+        zoomToElement(clickedObject, true);
 
-        zoomToElement(clickedObject, true); // Enable smooth transition
-
-        let geneName = clickedObject.geneName;  // Assuming geneName is inside metadata
-        console.log(geneName); // Log geneName
-
-
-        // Ako je kliknut element sa podacima o genu
+        let geneName = clickedObject.geneName;
         if (geneName) {
             fetchProteinConcentrationData(geneName)
                 .then(proteinData => {
-                    console.log(proteinData);
                     if (proteinData.young && proteinData.old) {
+                        loadGenePapers(geneName);
                         createProteinPLot(proteinData);
                         proteinPlot.setAttribute('style', 'display: block;');
-                        loadGenePapers(geneName);
                         fillInData(proteinData);
+                        closeButton.classList.add("visible");
                     } else {
                         console.error("Error: Missing data for plotting.");
                     }
                 })
-                .catch(error => {
-                    console.error("Error fetching protein concentration data:", error);
-                });
-
-            function fillInData(proteinData) {
-                const infoContainer = document.getElementById("sidebar-content");
-
-                if (proteinData && proteinData.additionalInfo) {
-                    infoContainer.innerHTML = `  
-                        <h3>Protein Information for Gene: ${proteinData.additionalInfo.EntrezGeneSymbol}</h3>
-                        <p><strong>Gene Name:</strong> ${proteinData.additionalInfo.TargetFullName}</p>
-                        <p><strong>Target:</strong> ${proteinData.additionalInfo.Target}</p>
-                        <p><strong>Entrez Gene ID:</strong> ${proteinData.additionalInfo.EntrezGeneID}</p>
-                        <p><strong>Organism:</strong> ${proteinData.additionalInfo.Organism}</p>
-                        <p><strong>Units:</strong> ${proteinData.additionalInfo.Units}</p>
-                        <p><strong>Type:</strong> ${proteinData.additionalInfo.Type}</p>
-                        <p><strong>Dilution:</strong> ${proteinData.additionalInfo.Dilution}</p>
-                       
-                    `;
-                } else {
-                    console.error("Protein data is missing or malformed.");
-                }
-            }
+                .catch(error => console.error("Error fetching protein concentration data:", error));
         }
     } else {
-        // Ako je kliknuto izvan objekta, vrati originalnu boju prethodnog objekta
-        restoreOriginalColor();
+        if (clickInterval < 300) {
+            closeFunction();
+        }
+
     }
 }
+
 
 
 
@@ -587,10 +895,6 @@ function highlightSphereElements(selectedElement) {
     console.log(selectedElement[0]);
     selectedElement = selectedElement[0];
     if (selectedElement) {
-
-
-
-
         // Show tooltip
         if (selectedElement.geneName) {
             const screenPosition = projectToScreen(selectedElement.position, camera);
@@ -637,8 +941,8 @@ function showTooltip(x, y, geneName, screenX, screenY) {
 
     info.innerHTML = `
         <strong>Gene:</strong> ${geneName}<br>
-        <strong>X:</strong> ${x.toFixed(2)}<br>
-        <strong>Y:</strong> ${y.toFixed(2)}
+        <strong>LogFC:</strong> ${x.toFixed(2)}<br>
+        <strong>ajd_P_Val:</strong> ${y.toFixed(2)}
     `;
 }
 
@@ -693,11 +997,21 @@ function onWindowResize() {
 
 }
 
-
+function closeFunction() {
+    closeButton.classList.remove("visible");
+    basicInfo.style.display = "block";
+    emptySidebar()
+    resetTooltip();
+    resetCamera();
+    restoreAllColors()
+}
 
 // Pokretanje aplikacije
 window.addEventListener("DOMContentLoaded", () => {
     init();
+    selectedObject = null
+    // Kada klikneš na close dugme, sakrij ga
+    closeButton.addEventListener("click", closeFunction);
     const toggleButton = document.getElementById("toggleButton");
     toggleButton.textContent = "2D"; // Dugme počinje s natpisom '2D'
     const testPageButton = document.getElementById("testButton");

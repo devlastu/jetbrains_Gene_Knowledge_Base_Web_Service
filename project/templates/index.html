@@ -41,18 +41,40 @@
         </button>
         <div id="elem-info"></div>
         <div id="sidebar">
-            <h2>Information</h2>
+            <!-- Search bar and back button -->
+            <label class="label">
+                <input type="text" class="search_bar" placeholder="Search for something..." />
+            </label>
+            <button id="close-info">Back</button>
 
-            <div id="protein-plot"></div>
-            <div id="scientific-paper">
-
-
+            <!-- Title above the sidebar content -->
+            <div id="welcome-message">
+                <h2>Welcome Gene Knowledge Base</h2>
             </div>
+
+            <!-- Container for important genes -->
+            <div id="important-genes">
+                <div class="header">
+                    <div class="left">
+                        <h3 id="symbolName">Top Genes</h3>
+                    </div>
+                    <div class="right">
+                        <h3 id="logTitle">logFC</h3>
+                        <h3 id="pTitle">adj_P_Val</h3>
+                    </div>
+                </div>
+
+                <div id="genes-list"></div>
+                <button id="moreImportantBtn">more indices</button>
+            </div>
+
+            <!-- Protein plot and scientific paper container -->
+            <div id="protein-plot"></div>
+            <div id="scientific-paper"></div>
             <button id="loadMoreBtn"></button>
             <div id="sidebar-content"></div>
-
-
         </div>
+
     </div>
 {#    <script src="{{ url_for('static', filename='js/index.js') }}"></script>#}
     <script type="module" src="{{ url_for('static', filename='js/index-three.js') }}"></script>

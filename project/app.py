@@ -2,6 +2,7 @@ from pprint import pprint
 
 import fprint
 import requests
+from bs4 import BeautifulSoup
 from flask import Flask, jsonify, render_template, request
 import pandas as pd
 import numpy as np
@@ -17,6 +18,7 @@ MYGENE_API_BASE = "https://mygene.info/v3"
 @app.route("/get_gene_papers", methods=["GET"])
 def get_gene_papers():
     gene_name = request.args.get("gene_name")
+    print(gene_name)
 
     if not gene_name:
         return jsonify({"error": "Gene name is required"}), 400
@@ -42,7 +44,6 @@ def get_gene_papers():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch gene info: {str(e)}"}), 500
 
-
     # 3. Ekstraktovati samo PubMed ID-jeve
     pubmed_ids = set()
     # Iz `generif`
@@ -51,11 +52,34 @@ def get_gene_papers():
             if "pubmed" in entry:
                 pubmed_ids.add(entry["pubmed"])
 
-
     # 4. Kreirati PubMed linkove
     pubmed_links = [f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}/" for pubmed_id in pubmed_ids]
 
-    return jsonify({"gene_name": gene_name, "pubmed_links": pubmed_links})
+    # # 5. Ekstraktovati heading-title sa svake PubMed stranice
+    # pubmed_papers = []
+    # for link in pubmed_links:
+    #     try:
+    #         response = requests.get(link)
+    #         response.raise_for_status()
+    #
+    #         # Parsiranje HTML-a stranice
+    #         soup = BeautifulSoup(response.content, 'html.parser')
+    #         print("ovjde sam")
+    #         # Pretražiti HTML za element koji sadrži naslov (obično je u <h1> tagu)
+    #         title_tag = soup.find('h1', class_='heading-title')
+    #         title = title_tag.get_text(strip=True) if title_tag else "No title found"
+    #
+    #         pubmed_papers.append({
+    #             "link": link,
+    #             "title": title
+    #         })
+    #     except requests.exceptions.RequestException as e:
+    #         pubmed_papers.append({
+    #             "link": link,
+    #             "title": f"Failed to fetch title: {str(e)}"
+    #         })
+    # print(pubmed_papers)
+    return jsonify({"gene_name": gene_name, "pubmed_papers": pubmed_links})
 
 
 
@@ -75,6 +99,12 @@ def plot_data():
         s4b_data['-log10(adj.P.Val)'] = -np.log10(s4b_data['adj.P.Val'])
         s4b_data['Z_value'] = np.random.uniform(-3, 3, len(s4b_data))
 
+        # Filter the data based on logFC and adj.P.Val
+        important_genes = s4b_data[(abs(s4b_data['logFC']) > 0.5) & (s4b_data['adj.P.Val'] < 0.05)]
+
+        # Display the filtered important genes
+        print(f"Important: {important_genes[['EntrezGeneSymbol', 'logFC', 'adj.P.Val']]}")
+
         # Ekstrakcija podataka koji su potrebni za 3D plot
         plot_data = {
             'x': s4b_data['logFC'].tolist(),
@@ -82,10 +112,17 @@ def plot_data():
             'z': s4b_data['Z_value'].tolist(),
             'color': s4b_data['-log10(adj.P.Val)'].tolist(),
             'hover_data': s4b_data['EntrezGeneSymbol'].tolist(),
-            'geneNames': s4b_data['EntrezGeneSymbol'].tolist(),  # Add gene name here
+            'geneNames': s4b_data['EntrezGeneSymbol'].tolist(),
             'logFC': s4b_data['logFC'].tolist(),
             'adj_P_Val': s4b_data['adj.P.Val'].tolist(),
-            # Add any other relevant fields here if needed
+            'important': important_genes.apply(
+                lambda row: {
+                    'geneSymbol': row['EntrezGeneSymbol'],
+                    'logFC': row['logFC'],
+                    'adj.P.Val': row['-log10(adj.P.Val)']
+                },
+                axis=1
+            ).tolist()  # Send important gene names with additional data
         }
 
         return jsonify(plot_data)  # Send the data in JSON format
@@ -94,31 +131,39 @@ def plot_data():
         return jsonify({"error": str(e)})
 
 
+
+
+
 @app.route('/protein_concentration_data')
 def protein_concentration_data():
-    gene_name = request.args.get('geneName')  # Get the gene name from the query parameter
+    gene_name = request.args.get('geneName')  # Uzimanje imena gena iz query parametra
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
-        # Load the data from the Excel file
-        s4b_data = read_excel_data(file_path, "S4A values")
-        # s4b_data_additional = read_excel_data(file_path, "S4A values")  # For additional information
+        # Učitavanje podataka iz obe relevantne tabele
+        s4a_data = read_excel_data(file_path, "S4A values")
+        s4b_data = read_excel_data(file_path, "S4B limma results")  # Dodajemo ekspresione podatke
 
-        # Filter the data for the requested gene
-        gene_data = s4b_data[s4b_data['EntrezGeneSymbol'] == gene_name]
-        # gene_data_additional = s4b_data_additional[s4b_data_additional['EntrezGeneSymbol'] == gene_name]
+        # Filtriranje po genu
+        gene_data = s4a_data[s4a_data['EntrezGeneSymbol'] == gene_name]
+        gene_exp_data = s4b_data[s4b_data['EntrezGeneSymbol'] == gene_name]
 
-        if gene_data.empty :
-            return jsonify({"error": f"No data found for gene {gene_name}"}), 404
+        # Ako nema podataka o proteinu u S4A tabeli
+        if gene_data.empty:
+            return jsonify({"error": f"No concentration data found for gene {gene_name}"}), 404
 
-        # Extract protein concentration data for young and old donors
+        # Ako nema podataka o ekspresiji u S4B tabeli
+        if gene_exp_data.empty:
+            return jsonify({"error": f"No expression data found for gene {gene_name}"}), 404
+
+        # Ekstrakcija podataka o proteinima (mladi i stari donori)
         young_columns = [col for col in gene_data.columns if 'YD' in col]
         old_columns = [col for col in gene_data.columns if 'OD' in col or 'PD' in col]
 
         young_donors = gene_data[young_columns].values.flatten().tolist()
         old_donors = gene_data[old_columns].values.flatten().tolist()
 
-        # Extract additional information about the gene from S4B table
+        # Dodatne informacije o genu iz S4A tabele
         additional_info = {
             "TargetFullName": gene_data["TargetFullName"].values[0],
             "Target": gene_data["Target"].values[0],
@@ -130,17 +175,30 @@ def protein_concentration_data():
             "Dilution": gene_data["Dilution"].values[0],
         }
 
-        # Return the protein concentration and additional gene information
-        print(additional_info)
+        # Dodatne informacije o ekspresiji gena iz S4B tabele
+        expression_info = {
+            "logFC": gene_exp_data["logFC"].values[0],  # Log fold change
+            "adj.P.Val": gene_exp_data["adj.P.Val"].values[0],  # P-vrednost nakon korekcije
+            "P.Value": gene_exp_data["P.Value"].values[0],  # Originalna P-vrednost
+            "B": gene_exp_data["B"].values[0],  # B-score (verovatnoća diferencijalne ekspresije)
+            "t": gene_exp_data["t"].values[0],  # t-statistika
+            "AveExpr": gene_exp_data["AveExpr"].values[0]  # Prosečna ekspresija
+        }
+
+        # Zamena mogućih NaN vrednosti sa "N/A"
+        additional_info = {k: (v if pd.notna(v) else "N/A") for k, v in additional_info.items()}
+        expression_info = {k: (v if pd.notna(v) else "N/A") for k, v in expression_info.items()}
+
+        # Slanje podataka kao JSON
         return jsonify({
             "youngDonors": young_donors,
             "oldDonors": old_donors,
-            "additionalInfo": additional_info
+            "additionalInfo": additional_info,
+            "expressionInfo": expression_info
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route('/')
