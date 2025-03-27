@@ -432,6 +432,8 @@ button:active {
     border-radius: 20px; /* Zaobljene ivice */
     font-size: 14px;
     font-family: Arial, Helvetica, sans-serif;
+    overflow-y: auto; /* Omogućava vertikalni scroll */
+    overflow-x: hidden; /* Sprečava horizontalni scroll */
 
 }
 
@@ -446,7 +448,19 @@ button:active {
     display: none;
 }
 
+/* Poboljšanje izgleda scrolla */
+#scientific-paper::-webkit-scrollbar {
+    width: 4px;
+}
 
+#scientific-paper::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+#scientific-paper::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.5);
+}
 @keyframes drop {
   0% {
     transform: translateY(0px);

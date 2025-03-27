@@ -124,7 +124,8 @@ def plot_data():
                 axis=1
             ).tolist()  # Send important gene names with additional data
         }
-
+        print(max(s4b_data['-log10(adj.P.Val)'].tolist()))
+        print(min(s4b_data['-log10(adj.P.Val)'].tolist()))
         return jsonify(plot_data)  # Send the data in JSON format
 
     except Exception as e:

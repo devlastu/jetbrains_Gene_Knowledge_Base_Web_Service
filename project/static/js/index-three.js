@@ -251,7 +251,6 @@ function displayImportantGenes(genes, start, end) {
     const slice = genes.slice(start, end);
     // Iteriraj kroz listu gena
     slice.forEach(gene => {
-        console.log(gene);
 
         // Provera da li su vrednosti definisane i da li su brojevi
         const logFC = (typeof gene.logFC === 'number' && !isNaN(gene.logFC)) ? gene.logFC.toFixed(2) : 'N/A';
@@ -395,25 +394,31 @@ function onGeneSelection(geneName) {
 }
 
 function fillInData(proteinData) {
+
     if (proteinData && proteinData.additionalInfo) {
         const additionalInfo = proteinData.additionalInfo;
+        let geneData = getGeneData(additionalInfo.EntrezGeneSymbol)
 
-                infoContainer.innerHTML = `  
-                    <h2>🧬 Gene: ${additionalInfo.EntrezGeneSymbol}</h2>
-                    <p><strong>Full Name:</strong> ${additionalInfo.TargetFullName}</p>
-                    <p><strong>Target:</strong> ${additionalInfo.Target}</p>
-                    <p><strong>Gene ID:</strong> ${additionalInfo.EntrezGeneID}</p>
-                    <p><strong>Organism:</strong> ${additionalInfo.Organism}</p>
-                    
-                    <hr>  
-                    
-                    <h3>📊 Protein Concentration Data</h3>
-                    <p><strong>Units:</strong> ${additionalInfo.Units}</p>
-                    <p><strong>Type:</strong> ${additionalInfo.Type}</p>
-                    <p><strong>Dilution:</strong> ${additionalInfo.Dilution}</p>
-                    
-                    <hr>
-                `;
+        infoContainer.innerHTML = `  
+            <h2>🧬 Gene: ${additionalInfo.EntrezGeneSymbol}</h2>
+            <p><strong>Full Name:</strong> ${additionalInfo.TargetFullName}</p>
+            <p><strong>Target:</strong> ${additionalInfo.Target}</p>
+            <p><strong>Gene ID:</strong> ${additionalInfo.EntrezGeneID}</p>
+            <p><strong>Organism:</strong> ${additionalInfo.Organism}</p>
+            
+            <hr>  
+            
+            <h3>📊 Protein Concentration Data</h3>
+            <p><strong>Units:</strong> ${additionalInfo.Units}</p>
+            <p><strong>Type:</strong> ${additionalInfo.Type}</p>
+            <p><strong>Dilution:</strong> ${additionalInfo.Dilution}</p>
+            
+            <hr>
+            <p><strong>logFC:</strong> ${geneData.logFC.toFixed(2)}</p>
+            <p><strong>adj_P_Val:</strong> ${geneData.adj_P_Val.toFixed(2)}</p>
+            
+            
+        `;
         } else {
             console.error("Protein data is missing or malformed.");
         }
@@ -428,10 +433,12 @@ function findGeneIndex(geneSymbol) {
 
 // Funkcija koja upravlja dugmetom "More" i "Less"
 function toggleMoreLess() {
+
     const showMoreBtn = document.getElementById('moreImportantBtn');
     const genesListContainer = document.getElementById('genes-list');
     const data = JSON.parse(localStorage.getItem('plotData'));  // Pretpostavljam da imate gene u localStorage
     const genes = data['important'];
+
 
     let start = 0;
     let end = 7;
@@ -546,7 +553,6 @@ function loadGenePapers(geneName) {
     // Funkcija za prikaz radova
     function displayPapers() {
         scientificContainer.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
-
         const list = document.createElement("ul");
         for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
             const item = document.createElement("li");
@@ -573,7 +579,7 @@ function loadGenePapers(geneName) {
 
     // Klik na Show More / Show Less
     loadMoreBtn.addEventListener("click", function () {
-
+        console.log("clicked")
         if (loadMoreBtn.innerText === "SHOW MORE") {
             visiblePapers = allPapers.length; // Učitaj sve radove
         } else {
@@ -609,6 +615,7 @@ function loadAndCreatePlot() {
                 create3DPlot(data);  // Kreiraj plot koristeći podatke
             }else{
                 isRotating = false;
+                scene.rotation.y = 0
                 create2DPlot(data);
             }
 
@@ -711,10 +718,12 @@ function create2DPlot(data) {
     // Kreiramo tačke (spheres) na osnovu podataka
     for (let i = 0; i < data.x.length; i++) {
         let color = new THREE.Color(getColor(data.y[i], minValue, maxValue)); // Određivanje boje
-        const material = new THREE.MeshBasicMaterial({
-            color,
-            transparent: true, // Omogućava promenu opacity-a
-            opacity: 1,
+        const material = new THREE.MeshStandardMaterial({
+          color,
+          emissive: color,  // Dodaj svetleći efekat u istoj boji
+          emissiveIntensity: 2, // Povećaj ako želiš jači sjaj
+          transparent: true,
+          opacity: 1,
         });
 
         const sphere = new THREE.Mesh(geometry, material);
@@ -812,8 +821,10 @@ function create3DPlot(data) {
     // Create geometry for the sphere directly without calling createBubble
     let geometry = new THREE.SphereGeometry(scaleFactor, 64, 32);
 
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color,
+      emissive: color,  // Dodaj svetleći efekat u istoj boji
+      emissiveIntensity: 2, // Povećaj ako želiš jači sjaj
       transparent: true,
       opacity: 1,
     });
@@ -863,6 +874,7 @@ function onMouseMove(event) {
 
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true); // Get first intersection
     const elementList = getSphereElements(intersections);
+    // console.log(elementList);
 
     // If no elements are hovered, hide the tooltip
     if (elementList.length === 0) {
@@ -1022,20 +1034,46 @@ function zoomToElement(targetElement, enableTransition) {
     });
 }
 
+function getGeneData(geneName) {
+
+  if (!plotData) {
+    plotData = JSON.parse(localStorage.getItem("plotData"));
+  }
+
+  // Pronađi indeks gde se nalazi traženi gen
+  const geneIndex = plotData.geneNames.indexOf(geneName);
+  if (geneIndex === -1) {
+    console.error(`Gene ${geneName} not found in plot_data`);
+    return null;
+  }
+
+
+  // Izvuci tražene podatke
+  return {
+    geneName: geneName,
+    logFC: plotData.x[geneIndex],
+    adj_P_Val: plotData.y[geneIndex]
+  };
+}
+
+
 
 
 function highlightSphereElements(selectedElement) {
 
     // Ensure selectedElement is valid
-    console.log(selectedElement[0]);
+    // console.log(selectedElement[0]);
     selectedElement = selectedElement[0];
+    // console.log(selectedElement);
     if (selectedElement) {
         // Show tooltip
         if (selectedElement.geneName) {
             const screenPosition = projectToScreen(selectedElement.position, camera);
+            let geneData = getGeneData(selectedElement.geneName);
+            console.log(geneData);
             showTooltip(
-                selectedElement.position.x,
-                selectedElement.position.y,
+                geneData.logFC,
+                geneData.adj_P_Val,
                 selectedElement.geneName,
                 screenPosition.x,
                 screenPosition.y
