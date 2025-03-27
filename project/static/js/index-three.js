@@ -8,12 +8,13 @@ import CameraControls from 'camera-controls';
 
 
 CameraControls.install({ THREE: THREE });
-
+let rotationStep = 0.0001
 let is3D = true; // Početno stanje je 3D
+let isLoader = true
 // Tooltip i osnovne promenljive
 const tooltip = document.getElementById('myDiv');
 const proteinPlot = document.getElementById('protein-plot');
-
+const musicElement = document.getElementById('musicElement');
 // Create the invisible element
 let invisibleTargetElement;
 let scene, camera, renderer, cameraControls, raycaster, mouse, points, mousePointer;
@@ -25,6 +26,7 @@ let intersections = []
 let selectedObject = null;
 let originalColor = new THREE.Color();
 const infoContainer = document.getElementById("sidebar-content");
+const sidebar = document.getElementById("sidebar");
 const scientificContainer = document.getElementById("scientific-paper");
 let loadMoreBtn = document.getElementById("loadMoreBtn");
 let resetBtn = document.getElementById("resetButton");
@@ -33,6 +35,16 @@ const showMoreBtn = document.getElementById('moreImportantBtn');
 const basicInfo = document.getElementById('important-genes');
 let isRotating = true; // Flag koji kontroliše rotaciju
 let sceneGroup; // Grupa koja sadrži sve objekte u sceni
+const canvasLoader = document.querySelector('.loader');
+const exploreBtn = document.getElementById("exploreBtn");
+const loaderContainer = document.querySelector('.loader-container');
+const resetMusicBtn = document.getElementById("resetMusic");
+const toggleMusicBtn = document.getElementById("toggleMusic");
+let music = document.getElementById("backgroundMusic");
+
+window.onload = () => {
+    canvasLoader.style.display = 'block';
+}
 
 // Global variable for initial camera and target positions
 const initialCameraConfig = {
@@ -40,6 +52,19 @@ const initialCameraConfig = {
     target: new THREE.Vector3(0, 0, 0)
 };
 
+const loaderCameraConfig = {
+    position: new THREE.Vector3(-10, -20, 50),
+    target: new THREE.Vector3(0, 0, 0)
+}
+
+function toStartPosition() {
+    cameraControls.setLookAt(
+        loaderCameraConfig.position.x, loaderCameraConfig.position.y, loaderCameraConfig.position.z,
+        loaderCameraConfig.target.x, loaderCameraConfig.target.y, loaderCameraConfig.target.z,
+        true
+    );
+    rotationStep = 0.0001;
+}
 
 
 // Create an invisible object at the initial camera position
@@ -59,6 +84,7 @@ function createInvisibleTargetElement() {
 
 
 function resetCamera() {
+    rotationStep = 0.001;
     zoomToElement(invisibleTargetElement, true)
     resetLook();
 }
@@ -70,6 +96,11 @@ function resetLook(){
         true
     );
 }
+
+function toggleRotation() {
+    isRotating = !isRotating;  // Okreni stanje rotacije
+}
+
 
 
 function init() {
@@ -123,12 +154,16 @@ function animate() {
 
       // Ako je rotacija omogućena, rotiraj scenu
     if (isRotating) {
-        scene.rotation.y += 0.001; // Brzina rotacije
+        // console.log("Rotating...");
+        if (is3D) {
+            scene.rotation.y += rotationStep; // Brzina rotacije
+        }
     }
     const delta = clock.getDelta();
     cameraControls.update(delta); // Ažurira kontrole kamere
 
     renderer.render(scene, camera);
+
 }
 
 const clock = new THREE.Clock(); // Za CameraControls update
@@ -163,6 +198,52 @@ function fetchProteinConcentrationData(geneName) {
             throw error;
         });
 }
+
+
+function handleGeneSelection(clickedObject) {
+    isRotating = false;
+    console.log("Ovdje ga na false");
+
+    // Vraćanje boje originalnog objekta
+    restoreOriginalColor();
+
+    // Odabir trenutnog objekta
+    selectedObject = clickedObject;
+    originalColor.copy(selectedObject.material.color);
+
+    // Osvetljavanje selektovanog objekta
+    lightenColor(selectedObject.material);
+
+    // Smanjivanje drugih objekata na sceni
+    dimOtherElements(scene, clickedObject);
+
+    // Zoom u selektovani objekat
+    zoomToElement(clickedObject, true);
+
+    // Učitavanje podataka o proteinu
+    let geneName = clickedObject.geneName;
+    if (geneName) {
+        fetchProteinConcentrationData(geneName)
+            .then(proteinData => {
+                if (proteinData.young && proteinData.old) {
+                    // Učitavanje naučnih radova i kreiranje grafikona
+                    loadGenePapers(geneName);
+                    createProteinPLot(proteinData);
+                    proteinPlot.setAttribute('style', 'display: block;');
+
+                    // Popunjavanje podataka u odgovarajući interfejs
+                    fillInData(proteinData);
+
+                    // Prikazivanje dugmeta za zatvaranje
+                    closeButton.classList.add("visible");
+                } else {
+                    console.error("Error: Missing data for plotting.");
+                }
+            })
+            .catch(error => console.error("Error fetching protein concentration data:", error));
+    }
+}
+
 
 function displayImportantGenes(genes, start, end) {
     const genesListContainer = document.getElementById('genes-list');
@@ -213,16 +294,58 @@ function displayImportantGenes(genes, start, end) {
         geneDiv.appendChild(logFCDiv);
         geneDiv.appendChild(adjPValDiv);
 
+
         // Dodaj event listener za klik
         geneDiv.addEventListener('click', function(event) {
-            event.preventDefault();
-            alert(`Kliknuli ste na gen: ${gene.geneSymbol}`);
+            const geneSymbol = gene.geneSymbol; // Dobijamo simbol gena koji je kliknut
+            isRotating = false;
+            const geneData = localStorage.getItem(geneSymbol); // Preuzimamo podatke iz localStorage
+
+            if (!geneData) {
+                console.error(`Gen ${geneSymbol} nije pronađen u localStorage.`);
+                return;
+            }
+
+            const geneInfo = JSON.parse(geneData); // Parsiramo JSON string iz localStorage
+            const { x, y, z } = geneInfo.position; // Ekstraktujemo poziciju gena
+
+            console.log(`Gen ${geneSymbol} pozicija:`, x, y, z);
+
+            // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
+            const targetElement = get3DObjectByPosition(x, y, z);
+
+            handleGeneSelection(targetElement);
         });
 
         // Dodaj geneDiv u container
         genesListContainer.appendChild(geneDiv);
     });
 }
+
+// Funkcija za traženje 3D objekta na osnovu pozicije
+function get3DObjectByPosition(x, y, z) {
+    let closestObject = null;
+    let minDistance = Infinity;
+
+    scene.traverse((object) => {
+        if (object.isMesh) {
+            const objPos = object.position;
+            const distance = Math.sqrt(
+                Math.pow(objPos.x - x, 2) +
+                Math.pow(objPos.y - y, 2) +
+                Math.pow(objPos.z - z, 2)
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestObject = object;
+            }
+        }
+    });
+
+    return closestObject;
+}
+
 
 function onGeneSelection(geneName) {
   // Pronalaženje podataka o genu u localStorage
@@ -482,8 +605,10 @@ function loadAndCreatePlot() {
     fetchData()
         .then(data => {
             if(is3D){
+                isRotating = true
                 create3DPlot(data);  // Kreiraj plot koristeći podatke
             }else{
+                isRotating = false;
                 create2DPlot(data);
             }
 
@@ -549,13 +674,32 @@ function restoreAllColors(){
 
 
 
-
+let axesHelper;
 // Kreiranje 2D plot-a
 function create2DPlot(data) {
     console.log("create2DPlot data:", data);
     clearScene();
     resetTooltip();
-    resetCamera()
+
+    if (isLoader){
+        toStartPosition();
+    }else{
+        resetCamera();
+    }
+
+    //  // Dodaj koordinatne ose na početku (po potrebi)
+    // if (!axesHelper) {
+    //     axesHelper = new THREE.AxesHelper(50);  // 50 je dužina osa
+    //
+    //     // Rotiraj ose za 90 stepeni oko Y ose
+    //     axesHelper.rotation.set(0, Math.PI / 2, 0); // Rotacija za 90 stepeni oko Y ose
+    //
+    //     // Postavi ose na određenu poziciju ako je potrebno
+    //     axesHelper.position.set(0, -60, 0);  // Pozicija koordinatnih osa (x=0, y=0, z=0)
+    //
+    //     scene.add(axesHelper);
+    // }
+
 
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
@@ -602,6 +746,17 @@ function create2DPlot(data) {
     tooltip.appendChild(renderer.domElement);
 }
 
+// Helper function to toggle the grid
+function toggleAxis() {
+    if (gridHelper) {
+        if (scene.children.includes(gridHelper)) {
+            scene.remove(gridHelper);  // Ukloni mrežu
+        } else {
+            scene.add(gridHelper);  // Dodaj mrežu
+        }
+    }
+}
+
 function clearScene() {
     while (scene.children.length > 0) {
         scene.remove(scene.children[0]);
@@ -637,7 +792,12 @@ function create3DPlot(data) {
 
   clearScene();
   resetTooltip();
-  resetCamera();
+  if (isLoader){
+      toStartPosition();
+  }else{
+      resetCamera();
+  }
+
 
   const minValue = Math.min(...data.y);
   const maxValue = Math.max(...data.y);
@@ -761,7 +921,7 @@ window.addEventListener("mousemove", (event) => {
 
 // Kada korisnik otpusti miš
 function onClick(event) {
-    isRotating = false;
+
     if (isDragging) return; // Ako je bio drag, ignoriši klik
 
     const currentTime = new Date().getTime();
@@ -773,31 +933,7 @@ function onClick(event) {
 
     if (intersections.object) {
         const clickedObject = intersections.object;
-
-        restoreOriginalColor();
-        selectedObject = clickedObject;
-        originalColor.copy(selectedObject.material.color);
-
-        lightenColor(selectedObject.material);
-        dimOtherElements(scene, clickedObject);
-        zoomToElement(clickedObject, true);
-
-        let geneName = clickedObject.geneName;
-        if (geneName) {
-            fetchProteinConcentrationData(geneName)
-                .then(proteinData => {
-                    if (proteinData.young && proteinData.old) {
-                        loadGenePapers(geneName);
-                        createProteinPLot(proteinData);
-                        proteinPlot.setAttribute('style', 'display: block;');
-                        fillInData(proteinData);
-                        closeButton.classList.add("visible");
-                    } else {
-                        console.error("Error: Missing data for plotting.");
-                    }
-                })
-                .catch(error => console.error("Error fetching protein concentration data:", error));
-        }
+        handleGeneSelection(clickedObject);
     } else {
         if (clickInterval < 300) {
             closeFunction();
@@ -869,7 +1005,6 @@ export function getSphereElements(objectList) {
 
 function zoomToElement(targetElement, enableTransition) {
     if (!targetElement) return;
-
     // Check if the target element has a bounding box
     const boundingBox = new THREE.Box3().setFromObject(targetElement);
 
@@ -1003,12 +1138,21 @@ function closeFunction() {
     emptySidebar()
     resetTooltip();
     resetCamera();
-    restoreAllColors()
+    restoreAllColors();
+    isRotating = true;
 }
+
+
 
 // Pokretanje aplikacije
 window.addEventListener("DOMContentLoaded", () => {
     init();
+    document.getElementById("myDiv").classList.add("fadeIn");
+    setTimeout(function() {
+        canvasLoader.style.display = "none";
+        tooltip.style.display = "block";
+        exploreBtn.style.display = "block";
+    }, 2000);
     selectedObject = null
     // Kada klikneš na close dugme, sakrij ga
     closeButton.addEventListener("click", closeFunction);
@@ -1020,10 +1164,12 @@ window.addEventListener("DOMContentLoaded", () => {
         if (is3D) {
             loadAndCreatePlot();
             toggleButton.textContent = "3D"; // Kada je u 2D modu, dugme treba da kaže '3D'
+
         } else {
             loadAndCreatePlot();
             toggleButton.textContent = "2D"; // Kada je u 3D modu, dugme treba da kaže '2D'
         }
+
         is3D = !is3D; // Obrće stanje prikaza
     });
 
@@ -1031,4 +1177,47 @@ window.addEventListener("DOMContentLoaded", () => {
     testPageButton.addEventListener('click', function() {
         window.location.href =  '/test-page'; // Pozivamo Flask rutu koja vodi do test.html
     });
+
+    exploreBtn.addEventListener("click", function () {
+        loaderContainer.style.display = "none";
+        sidebar.style.display = "block";
+        resetBtn.style.display = "block";
+        toggleButton.style.display = "block";
+        musicElement.style.display = "block";
+        music.play();
+        isLoader = false
+        resetCamera();
+    })
+
+    resetMusicBtn.addEventListener("click", function () {
+        resetMusic()
+    })
+    toggleMusicBtn.addEventListener("click", function () {
+        toggleMusic();
+    })
 });
+
+
+
+function toggleMusic() {
+    let music = document.getElementById("backgroundMusic");
+    let play = document.getElementById("playIcon");
+    let pause = document.getElementById("pauseIcon");
+    if (music.paused) {
+        music.play();
+        play.style.display = "none";
+        pause.style.display = "block";
+    } else {
+        play.style.display = "block";
+        pause.style.display = "none";
+        music.pause();
+    }
+}
+
+function resetMusic() {
+
+    music.pause(); // Pauziraj muziku
+    music.currentTime = 0; // Vrati na početak
+    music.play();
+}
+

@@ -29,18 +29,49 @@
 
 </head>
 <body>
+    <audio id="backgroundMusic" loop>
+        <source src="{{ url_for('static', filename='audio/interstellar_piano.mp3') }}" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
 
-    <div id="loader" style="display: none;">Loading...</div>
+
+    <div class="loader-container">
+        <h1>JetBrains Gene Base</h1>
+        <div class="title">
+            Gene Knowledge Base Web Service
+        </div>
+        <div class="loader">Loading Gene Base</div>
+        <button id="exploreBtn" style="display: none">Explore the base</button>
+    </div>
+
     <button id="testButton">
         Test Page
     </button>
-    <div id="myDiv">
-        <button id="toggleButton">2D</button>
-        <button id="resetButton">
+
+    <div id="myDiv" style="display: none">
+
+        <button id="toggleButton" style="display: none">2D</button>
+        <button id="resetButton" style="display: none">
             Reset to Initial Position
         </button>
-        <div id="elem-info"></div>
-        <div id="sidebar">
+        <div id="musicElement" style="display: none">
+            <button id="resetMusic">
+                <img src="{{ url_for('static', filename='images/reset.png') }}" alt="Reset Music">
+            </button>
+
+            <button id="toggleMusic">
+                <img id="playIcon" src="{{ url_for('static', filename='images/play.png') }}" alt="Reset Music" style="display: none">
+                <img id="pauseIcon" src="{{ url_for('static', filename='images/pause.png') }}" alt="Reset Music">
+            </button>
+        </div>
+        <div id="elem-info" style="display: none"></div>
+        <div id="sidebar" style="display: none">
+            <div class="lava-lamp" style="display: none">
+              <div class="bubble"></div>
+              <div class="bubble1"></div>
+              <div class="bubble2"></div>
+              <div class="bubble3"></div>
+            </div>
             <!-- Search bar and back button -->
             <label class="label">
                 <input type="text" class="search_bar" placeholder="Search for something..." />
@@ -74,10 +105,21 @@
             <button id="loadMoreBtn"></button>
             <div id="sidebar-content"></div>
         </div>
-
     </div>
 {#    <script src="{{ url_for('static', filename='js/index.js') }}"></script>#}
     <script type="module" src="{{ url_for('static', filename='js/index-three.js') }}"></script>
+    <script>
+        let music = document.getElementById("backgroundMusic");
 
+        function userInteraction() {
+            music.play().catch(error => console.log("Autoplay failed:", error));
+            document.removeEventListener("mousemove", userInteraction);
+            document.removeEventListener("click", userInteraction);
+        }
+
+        // Ako korisnik pomeri miša ili klikne, pokreće se muzika
+        document.addEventListener("mousemove", userInteraction);
+        document.addEventListener("click", userInteraction);
+    </script>
 </body>
 </html>

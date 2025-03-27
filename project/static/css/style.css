@@ -11,33 +11,92 @@ body, html {
     z-index: 10;
 }
 
-/* Set the plot to take up between 10% and 90% of the height */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 #myDiv {
     width: 100%;
-    height: 100vh;  /* 80% of the viewport height */
-    left: 0;  /* Adjust the left value if necessary */
+    height: 100vh;
+    left: 0;
     position: relative;
     z-index: 900;
+    opacity: 0; /* Početna vrednost */
+    animation: fadeIn 1s ease-out forwards;
 }
+
 
 /* Optional: to prevent body overflow from affecting the plot */
 html {
     overflow: hidden;
 }
+.loader-container{
+    z-index: 9998;    /* Postavi visoki z-index da loader bude ispred svih elemenata */
+    background-color: #232323FF;
+}
 
-#loader {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+
+
+/* Loader container styles */
+.loader-container {
+    position: fixed; /* da bude uvek na ekranu */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* polutransparentna pozadina */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     color: white;
-    font-size: 20px;
+    z-index: 1000; /* postavljamo ga iznad ostalih elemenata na stranici */
+}
+
+/* Title styling */
+.title {
+    font-size: 3rem; /* Veći font za title */
     font-weight: bold;
-    display: none;
+    margin-bottom: 20px;
 }
-.input {
-  max-width: 190px;
+
+/* Loader styling */
+.loader {
+    font-size: 1.5rem; /* Srednja veličina za loader tekst */
+    animation: pulse 2s infinite ease-in-out;
+    margin-bottom: 20px;
 }
+
+/* Button styling */
+#exploreBtn {
+    padding: 10px 20px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+
+/* Animation for loader */
+@keyframes pulse {
+    0% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.5;
+    }
+}
+
+
 
 .label {
   position: relative;
@@ -99,7 +158,21 @@ canvas[data-engine="three.js r153"] {
     /*border: none;*/
     /*border-radius: 5px;*/
     cursor: pointer;
-    z-index: 1000;
+    z-index: 999;
+}
+
+
+#musicElement{
+    position: fixed;
+    top: 20px;
+    right: 20%;
+    padding: 10px 20px;
+    /*background-color: #FF5722;*/
+    /*color: white;*/
+    /*border: none;*/
+    /*border-radius: 5px;*/
+    cursor: pointer;
+    z-index: 999;
 }
 
 .custom-link {
@@ -222,6 +295,15 @@ button {
     text-align: left;
     margin-bottom: 10px; /* Razmak ispod gene-symbol */
     text-decoration: underline;
+    transition: font-weight 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+.gene-symbol:hover {
+    font-weight: bold;
+    text-shadow:
+        2px 2px 10px rgba(140, 48, 97, 0.8),
+        -2px -2px 10px rgba(211, 144, 75, 0.8);
 }
 
 /* Stilizuj logFC i adjPVal tako da idu jedan ispod drugog */
@@ -252,7 +334,7 @@ button {
     display: none;
     border-radius: 5px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 999;
 }
 p {
     font-size: 18px;
@@ -320,7 +402,7 @@ button:active {
     right: 80%;
     padding: 10px 20px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 999;
 }
 
 #toggleButton{
@@ -330,7 +412,7 @@ button:active {
     left: 2%;
     padding: 10px 20px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 999;
 }
 
 
@@ -364,3 +446,86 @@ button:active {
     display: none;
 }
 
+
+@keyframes drop {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(80px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.lava-lamp {
+  position: relative;
+  width: 50px;
+  height: 100px;
+  background: #000;
+  border-radius: 25px;
+  overflow: hidden;
+}
+
+.bubble {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(to bottom, #e64980, #ff8787);
+  border-radius: 50%;
+  left: 15px;
+  animation: drop 5s ease-in-out infinite;
+}
+.bubble1 {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(to bottom, #82c91e, #3bc9db);
+  border-radius: 50%;
+  left: 1px;
+  animation: drop 3s ease-in-out infinite;
+}
+.bubble2 {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(to bottom, #7950f2, #f783ac);
+  border-radius: 50%;
+  left: 30px;
+  animation: drop 4s ease-in-out infinite;
+}
+.bubble3 {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(to bottom, #4481eb, #04befe);
+  border-radius: 50%;
+  left: 20px;
+  animation: drop 6s ease-in-out infinite;
+}
+
+
+#resetMusic, #toggleMusic {
+    cursor: pointer;
+}
+
+#resetMusic img, #toggleMusic img {
+    width: 30px;
+    height: 30px;
+    transform: scale(1);  /* Postavi početni scale na 1 */
+    transition: transform 0.3s ease-in-out;
+    filter: invert(1); /* Ovo će invertovati boje */
+}
+
+
+#resetMusic:hover img,
+#toggleMusic:hover img {
+    transform: scale(1.1);
+    filter: brightness(0.8);
+    filter: invert(1); /* Ovo će invertovati boje */
+}
