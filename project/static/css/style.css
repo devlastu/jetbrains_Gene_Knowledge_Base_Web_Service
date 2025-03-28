@@ -11,6 +11,7 @@ body, html {
     z-index: 10;
 }
 
+
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -19,6 +20,8 @@ body, html {
         opacity: 1;
     }
 }
+
+
 
 #myDiv {
     width: 100%;
@@ -42,6 +45,8 @@ html {
 
 
 
+
+
 /* Loader container styles */
 .loader-container {
     position: fixed; /* da bude uvek na ekranu */
@@ -55,7 +60,7 @@ html {
     justify-content: center;
     align-items: center;
     color: white;
-    z-index: 1000; /* postavljamo ga iznad ostalih elemenata na stranici */
+    z-index: 9999; /* postavljamo ga iznad ostalih elemenata na stranici */
 }
 
 /* Title styling */
@@ -180,6 +185,13 @@ canvas[data-engine="three.js r153"] {
     text-decoration: none;
     font-weight: bold;
 }
+
+
+.custom-link:hover {
+    color: rgb(255, 199, 82);
+    transform: scale(1.1);
+}
+
 
 .gene-link {
     font-size: 12px;
@@ -416,6 +428,19 @@ button:active {
 }
 
 
+#overlay {
+    position: fixed;
+    top: 3vh;
+    right: 0;
+    bottom: 5vh;
+    width: 18%;        /* Sidebar zauzima 20% širine ekrana */
+    height: 92vh;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.5); /* Tamna providna pozadina */
+    border-radius: 20px; /* Zaobljene ivice */
+    display: none; /* Sakriveno dok nije aktivno */
+    z-index: 999; /* Manji z-index od sidebara */
+}
 
 
 #sidebar {
@@ -434,7 +459,7 @@ button:active {
     font-family: Arial, Helvetica, sans-serif;
     overflow-y: auto; /* Omogućava vertikalni scroll */
     overflow-x: hidden; /* Sprečava horizontalni scroll */
-
+     z-index: 1000; /* Manji z-index od sidebara */
 }
 
 /* Stil za protein plot da bude unutar sidebar-a */
@@ -442,9 +467,10 @@ button:active {
     width: 90%;         /* Zauzima 100% širine sidebar-a */
     height: 30vh;        /* Zauzima 30% visine ekrana (baze za visinu sidebar-a) */
     margin-top: 20px;    /* Da se pomeri od vrha */
+
     position: relative;
     background-color: rgb(0, 0, 0); /* Boja pozadine */
-    border-radius: 5px; /* Zaobljene ivice */
+    border-radius: 40px; /* Zaobljene ivice */
     display: none;
 }
 
@@ -473,6 +499,8 @@ button:active {
   }
 }
 
+
+/*Loader for sidebar*/
 .lava-lamp {
   position: relative;
   width: 50px;
@@ -542,4 +570,232 @@ button:active {
     transform: scale(1.1);
     filter: brightness(0.8);
     filter: invert(1); /* Ovo će invertovati boje */
+}
+
+
+
+
+
+/* Loader for scientific papers */
+#lava-loader {
+  --uib-size: 200px;
+  --uib-speed: 2.5s;
+
+  position: absolute;  /* Pozicionira element u odnosu na najbliži roditelj sa pozicioniranjem */
+  top: 50%;  /* Vertikalno centriranje */
+  left: 50%; /* Horizontalno centriranje */
+  transform: translate(-50%, -50%); /* Precizno centriranje pomoću transformacije */
+
+  height: var(--uib-size);
+  width: var(--uib-size);
+}
+
+
+#non-loader{
+    opacity: 0;  /* Početno skriven */
+    transform: scale(0.95); /* Blagi zoom-out efekat */
+    transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+}
+
+.slice {
+  position: relative;
+  height: calc(var(--uib-size) / 6);
+  width: 100%;
+}
+
+.slice::before,
+.slice::after {
+  --uib-a: calc(var(--uib-speed) / -2);
+  --uib-b: calc(var(--uib-speed) / -6);
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(50% - var(--uib-size) / 12);
+  height: 100%;
+  width: calc(100% / 6);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: orbit var(--uib-speed) linear infinite;
+  transition: background-color 0.3s ease;
+}
+
+.slice:nth-child(1)::after {
+  animation-delay: var(--uib-a);
+}
+
+.slice:nth-child(2)::before {
+  animation-delay: var(--uib-b);
+}
+
+.slice:nth-child(2)::after {
+  animation-delay: calc(var(--uib-a) + var(--uib-b));
+}
+
+.slice:nth-child(3)::before {
+  animation-delay: calc(var(--uib-b) * 2);
+}
+
+.slice:nth-child(3)::after {
+  animation-delay: calc(var(--uib-a) + var(--uib-b) * 2);
+}
+
+.slice:nth-child(4)::before {
+  animation-delay: calc(var(--uib-b) * 3);
+}
+
+.slice:nth-child(4)::after {
+  animation-delay: calc(var(--uib-a) + var(--uib-b) * 3);
+}
+
+.slice:nth-child(5)::before {
+  animation-delay: calc(var(--uib-b) * 4);
+}
+
+.slice:nth-child(5)::after {
+  animation-delay: calc(var(--uib-a) + var(--uib-b) * 4);
+}
+
+.slice:nth-child(6)::before {
+  animation-delay: calc(var(--uib-b) * 5);
+}
+
+.slice:nth-child(6)::after {
+  animation-delay: calc(var(--uib-a) + var(--uib-b) * 5);
+}
+
+@keyframes orbit {
+  0% {
+    transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684);
+    opacity: 0.65;
+  }
+
+  5% {
+    transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.684208);
+    opacity: 0.58;
+  }
+
+  10% {
+    transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.631576);
+    opacity: 0.51;
+  }
+
+  15% {
+    transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.578944);
+    opacity: 0.44;
+  }
+
+  20% {
+    transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.526312);
+    opacity: 0.37;
+  }
+
+  25% {
+    transform: translateX(0%) scale(0.47368);
+    opacity: 0.3;
+  }
+
+  30% {
+    transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.526312);
+    opacity: 0.37;
+  }
+
+  35% {
+    transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.578944);
+    opacity: 0.44;
+  }
+
+  40% {
+    transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.631576);
+    opacity: 0.51;
+  }
+
+  45% {
+    transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.684208);
+    opacity: 0.58;
+  }
+
+  50% {
+    transform: translateX(calc(var(--uib-size) * -0.25)) scale(0.73684);
+    opacity: 0.65;
+  }
+
+  55% {
+    transform: translateX(calc(var(--uib-size) * -0.235)) scale(0.789472);
+    opacity: 0.72;
+  }
+
+  60% {
+    transform: translateX(calc(var(--uib-size) * -0.182)) scale(0.842104);
+    opacity: 0.79;
+  }
+
+  65% {
+    transform: translateX(calc(var(--uib-size) * -0.129)) scale(0.894736);
+    opacity: 0.86;
+  }
+
+  70% {
+    transform: translateX(calc(var(--uib-size) * -0.076)) scale(0.947368);
+    opacity: 0.93;
+  }
+
+  75% {
+    transform: translateX(0%) scale(1);
+    opacity: 1;
+  }
+
+  80% {
+    transform: translateX(calc(var(--uib-size) * 0.076)) scale(0.947368);
+    opacity: 0.93;
+  }
+
+  85% {
+    transform: translateX(calc(var(--uib-size) * 0.129)) scale(0.894736);
+    opacity: 0.86;
+  }
+
+  90% {
+    transform: translateX(calc(var(--uib-size) * 0.182)) scale(0.842104);
+    opacity: 0.79;
+  }
+
+  95% {
+    transform: translateX(calc(var(--uib-size) * 0.235)) scale(0.789472);
+    opacity: 0.72;
+  }
+
+  100% {
+    transform: translateX(calc(var(--uib-size) * 0.25)) scale(0.73684);
+    opacity: 0.65;
+  }
+}
+
+.slice:nth-child(1)::before,
+.slice:nth-child(1)::after {
+  background-color: rgba(217, 147, 89);
+}
+
+.slice:nth-child(2)::before,
+.slice:nth-child(2)::after {
+  background-color: rgba(217, 119, 89);
+}
+
+.slice:nth-child(3)::before,
+.slice:nth-child(3)::after {
+  background-color: rgba(211, 144, 75);
+}
+
+.slice:nth-child(4)::before,
+.slice:nth-child(4)::after {
+  background-color: rgba(198, 60, 81);
+}
+
+.slice:nth-child(5)::before,
+.slice:nth-child(5)::after {
+  background-color: rgba(140, 48, 97);
+}
+
+.slice:nth-child(6)::before,
+.slice:nth-child(6)::after {
+  background-color: rgba(82, 34, 88);
 }

@@ -3,7 +3,7 @@ from pprint import pprint
 import fprint
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, url_for
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -204,11 +204,13 @@ def protein_concentration_data():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    model_url = url_for('static', filename='models/gltf/Flower/Flower.glb')
+    return render_template('index.html', model_url=model_url)
 
 @app.route('/test-page')
 def test_page():
-    return render_template('protein-look.html')
+    model_url = url_for('static', filename='models/gltf/Flower/Flower.glb')
+    return render_template('protein-look.html', model_url=model_url)
 
 if __name__ == '__main__':
     app.run(debug=True)

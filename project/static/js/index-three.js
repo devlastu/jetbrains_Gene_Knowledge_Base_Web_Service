@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 import CameraControls from 'camera-controls';
-
-
-
-
-
-
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import Stats from 'three/addons/libs/stats.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 CameraControls.install({ THREE: THREE });
 let rotationStep = 0.0001
@@ -41,6 +39,19 @@ const loaderContainer = document.querySelector('.loader-container');
 const resetMusicBtn = document.getElementById("resetMusic");
 const toggleMusicBtn = document.getElementById("toggleMusic");
 let music = document.getElementById("backgroundMusic");
+const lavaLoader = document.getElementById("lava-loader");
+const nonLoaderInfo = document.getElementById("non-loader");
+
+
+let stemMesh, blossomMesh;
+let stemGeometry, blossomGeometry;
+let stemMaterial, blossomMaterial;
+const dummy = new THREE.Object3D();
+
+const _position = new THREE.Vector3();
+const _normal = new THREE.Vector3();
+const _scale = new THREE.Vector3();
+
 
 window.onload = () => {
     canvasLoader.style.display = 'block';
@@ -65,6 +76,7 @@ function toStartPosition() {
     );
     rotationStep = 0.0001;
 }
+
 
 
 // Create an invisible object at the initial camera position
@@ -102,6 +114,160 @@ function toggleRotation() {
 }
 
 
+let hiddenObject = null
+let torusObject = null
+let apiCount = 1000
+let sampler;
+const ages = new Float32Array( apiCount );
+const scales = new Float32Array( apiCount );
+const modelDataDiv = document.getElementById("model-data");
+const modelUrl = modelDataDiv.getAttribute("data-model-url");
+
+
+const scaleCurve = function ( t ) {
+    return Math.abs( easeOutCubic( ( t > 0.5 ? 1 - t : t ) * 2 ) );
+};
+
+const easeOutCubic = function ( t ) {
+    return ( -- t ) * t * t + 1;
+};
+
+
+// Funkcija koja se poziva kada se klikne na loptu
+function toggleSphereAndShowTorus(clickedObject) {
+
+    const api = {
+        count: apiCount,
+        distribution: 'random',
+        resample: resample,
+        surfaceColor: clickedObject.material.color,
+    };
+    console.log(api);
+    clickedObject.visible = false;
+    hiddenObject = clickedObject;
+
+
+    // let surfaceGeometry = new THREE.BoxGeometry( 10, 10, 10 ).toNonIndexed();
+    const surfaceGeometry = new THREE.TorusKnotGeometry( 10, 3, 100, 16 ).toNonIndexed();
+    torusObject = surfaceGeometry;
+    const surfaceMaterial = new THREE.MeshLambertMaterial({
+        color: api.surfaceColor,
+        wireframe: false,
+        transparent: false,  // Ensure transparency is off
+        opacity: 1           // Set opacity to 1 for full visibilitys
+    });
+    const surface = new THREE.Mesh( surfaceGeometry, surfaceMaterial );
+
+
+
+
+    // Scaling curve causes particles to grow quickly, ease gradually into full scale, then
+    // disappear quickly. More of the particle's lifetime is spent around full scale.
+
+
+    const loader = new GLTFLoader();
+
+    loader.load( modelUrl, function ( gltf ) {
+        const _stemMesh = gltf.scene.getObjectByName( 'Stem' );
+        const _blossomMesh = gltf.scene.getObjectByName( 'Blossom' );
+
+        stemGeometry = _stemMesh.geometry.clone();
+        blossomGeometry = _blossomMesh.geometry.clone();
+
+        const defaultTransform = new THREE.Matrix4()
+            .makeRotationX( Math.PI )
+            .multiply( new THREE.Matrix4().makeScale( 7, 7, 7 ) );
+
+        stemGeometry.applyMatrix4( defaultTransform );
+        blossomGeometry.applyMatrix4( defaultTransform );
+
+        stemMaterial = _stemMesh.material;
+        blossomMaterial = _blossomMesh.material;
+
+        stemMesh = new THREE.InstancedMesh( stemGeometry, stemMaterial, apiCount );
+        blossomMesh = new THREE.InstancedMesh( blossomGeometry, blossomMaterial, apiCount );
+
+        // Assign random colors to the blossoms.
+        const color = new THREE.Color();
+        const blossomPalette = [ 0xF20587, 0xF2D479, 0xF2C879, 0xF2B077, 0xF24405 ];
+
+        for ( let i = 0; i < apiCount; i ++ ) {
+            color.setHex( blossomPalette[ Math.floor( Math.random() * blossomPalette.length ) ] );
+            blossomMesh.setColorAt( i, color );
+        }
+
+        // Instance matrices will be updated every frame.
+        stemMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+        blossomMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+
+        resample();
+        initialize();
+    } );
+
+    function initialize() {
+        camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
+        camera.position.set( 25, 25, 25 );
+        camera.lookAt( 0, 0, 0 );
+
+
+        const pointLight = new THREE.PointLight( 0xAA8899, 2.5, 0, 0 );
+        pointLight.position.set( 50, - 25, 75 );
+        scene.add( pointLight );
+
+        scene.add( new THREE.AmbientLight( 0xffffff, 3 ) );
+
+        scene.add( stemMesh );
+        scene.add( blossomMesh );
+        scene.add( surface );
+
+    }
+
+    function resample() {
+        const vertexCount = surface.geometry.getAttribute( 'position' ).count;
+        console.info( 'Sampling ' + apiCount + ' points from a surface with ' + vertexCount + ' vertices...' );
+        console.time( '.build()' );
+        sampler = new MeshSurfaceSampler( surface )
+            .setWeightAttribute( api.distribution === 'weighted' ? 'uv' : null )
+            .build();
+        console.timeEnd( '.build()' );
+        console.time( '.sample()' );
+        for ( let i = 0; i < apiCount; i ++ ) {
+            ages[ i ] = Math.random();
+            scales[ i ] = scaleCurve( ages[ i ] );
+            resampleParticle( i );
+        }
+        console.timeEnd( '.sample()' );
+        stemMesh.instanceMatrix.needsUpdate = true;
+        blossomMesh.instanceMatrix.needsUpdate = true;
+    }
+}
+
+function updateParticle( i ) {
+    ages[ i ] += 0.005;
+    if ( ages[ i ] >= 1 ) {
+        ages[ i ] = 0.001;
+        scales[ i ] = scaleCurve( ages[ i ] );
+        resampleParticle( i );
+        return;
+    }
+    const prevScale = scales[ i ];
+    scales[ i ] = scaleCurve( ages[ i ] );
+    _scale.set( scales[ i ] / prevScale, scales[ i ] / prevScale, scales[ i ] / prevScale );
+    stemMesh.getMatrixAt( i, dummy.matrix );
+    dummy.matrix.scale( _scale );
+    stemMesh.setMatrixAt( i, dummy.matrix );
+    blossomMesh.setMatrixAt( i, dummy.matrix );
+}
+function resampleParticle( i ) {
+    sampler.sample( _position, _normal );
+    _normal.add( _position );
+    dummy.position.copy( _position );
+    dummy.scale.set( scales[ i ], scales[ i ], scales[ i ] );
+    dummy.lookAt( _normal );
+    dummy.updateMatrix();
+    stemMesh.setMatrixAt( i, dummy.matrix );
+    blossomMesh.setMatrixAt( i, dummy.matrix );
+}
 
 function init() {
     scene = new THREE.Scene();
@@ -118,11 +284,8 @@ function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.copy(initialCameraConfig.position);
     resetBtn.addEventListener("click", closeFunction);
-    // Add listener to call onMouseMove every time the mouse moves in the browser window
-    document.addEventListener('mousemove', onMouseMove, false);
-    document.addEventListener('click', onClick, false); // Dodajemo event listener za click
 
-    console.log("Scene and camera initialized:", scene, camera); // Check initialization
+    // console.log("Scene and camera initialized:", scene, camera); // Check initialization
 
     // Inicijalizacija CameraControls
     cameraControls = new CameraControls(camera, renderer.domElement);
@@ -148,6 +311,30 @@ function init() {
     }
 }
 
+function render() {
+    if ( stemMesh && blossomMesh ) {
+
+        const time = Date.now() * 0.001;
+
+        scene.rotation.x = Math.sin( time / 4 );
+        scene.rotation.y = Math.sin( time / 2 );
+
+        for ( let i = 0; i < apiCount; i ++ ) {
+
+            updateParticle( i );
+
+        }
+
+        stemMesh.instanceMatrix.needsUpdate = true;
+        blossomMesh.instanceMatrix.needsUpdate = true;
+
+        stemMesh.computeBoundingSphere();
+        blossomMesh.computeBoundingSphere();
+
+    }
+
+    renderer.render( scene, camera );
+}
 // Animacija sa CameraControls
 function animate() {
     requestAnimationFrame(animate);
@@ -162,7 +349,7 @@ function animate() {
     const delta = clock.getDelta();
     cameraControls.update(delta); // Ažurira kontrole kamere
 
-    renderer.render(scene, camera);
+    render()
 
 }
 
@@ -175,7 +362,7 @@ function fetchData() {
         .then(data => {
             // Sačuvaj podatke u local storage
             localStorage.setItem('plotData', JSON.stringify(data));
-            console.log("Podaci su sačuvani u local storage.");
+            // console.log("Podaci su sačuvani u local storage.");
             return data; // Vrati podatke za dalju obradu
         })
         .catch(error => console.error("Error fetching plot data:", error));
@@ -201,9 +388,11 @@ function fetchProteinConcentrationData(geneName) {
 
 
 function handleGeneSelection(clickedObject) {
-    isRotating = false;
-    console.log("Ovdje ga na false");
 
+    isRotating = false;
+    // console.log("Ovdje ga na false");
+    lavaLoader.style.display = 'block';
+    basicInfo.setAttribute('style', 'display:none');
     // Vraćanje boje originalnog objekta
     restoreOriginalColor();
 
@@ -486,8 +675,8 @@ function createProteinPLot(data) {
             opacity: 1,
             line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
         },
-        name: 'Young Donors',
-        hovertemplate: 'X: %{x}<br>Y: %{y}<extra></extra>',
+        name: 'Young',
+        hovertemplate: 'Young<br>X: %{x}<br>Y: %{y}<extra></extra>',
         type: 'scatter'
     };
 
@@ -501,8 +690,8 @@ function createProteinPLot(data) {
             opacity: 1,
             line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
         },
-        name: 'Old Donors',
-        hovertemplate: 'X: %{x}<br>Y: %{y}<extra></extra>',
+        name: 'Old',
+        hovertemplate: 'Old<br>X: %{x}<br>Y: %{y}<extra></extra>',
         type: 'scatter'
     };
 
@@ -510,16 +699,29 @@ function createProteinPLot(data) {
     const sidebarWidth = document.getElementById('sidebar').offsetWidth; // Širina sidebar-a
     const plotHeight = window.innerHeight * 0.3; // Visina 30% od visine prozora
 
+
     // Layout za plot
     const layout = {
-        width: sidebarWidth,  // Koristi širinu sidebar-a
+        width: 0.9 * sidebarWidth,  // Koristi širinu sidebar-a
         height: plotHeight,   // Koristi visinu 30% od prozora
-        margin: { l: 20, r: 20, b: 40, t: 40 },  // Opcionalni margini
-        paper_bgcolor: "#000000",
-        plot_bgcolor: "#000000",
-        font: { color: "#ffffff" },
-        showlegend: true,
-        hovermode: 'closest'
+        margin: { l: 0, r: 0, b: 0, t: 0 },  // Ukoni margine za da bi bilo što je moguće bliže ivici
+        paper_bgcolor: "#000000",  // Pozadina papira
+        plot_bgcolor: "#000000",   // Pozadina grafa
+        font: { color: "#ffffff" }, // Tekst u beloj boji
+        showlegend: false, // Sakrij legendu
+        hovermode: 'closest',
+        xaxis: {
+            showgrid: true,  // Prikazivanje mreže na x-osi
+            zeroline: false, // Sakrij nulu na x-osi
+            showticklabels: true, // Prikazivanje oznaka na x-osi
+            color: '#ffffff', // Boja osa
+        },
+        yaxis: {
+            showgrid: true,  // Prikazivanje mreže na y-osi
+            zeroline: false, // Sakrij nulu na y-osi
+            showticklabels: true, // Prikazivanje oznaka na y-osi
+            color: '#ffffff', // Boja osa
+        }
     };
 
 
@@ -527,12 +729,55 @@ function createProteinPLot(data) {
     Plotly.newPlot('protein-plot', [traceYoung, traceOld], layout);
 }
 
+
+
+let allPapers = [];
+let visiblePapers = 3; // Početno prikazivanje 3 rada
+function handleLoadMoreClick() {
+    console.log("clicked")
+    console.log(loadMoreBtn.innerText)
+    if (loadMoreBtn.innerText === "SHOW MORE") {
+        console.log("show more")
+        visiblePapers = allPapers.length; // Učitaj sve radove
+        console.log(visiblePapers);
+    } else {
+        visiblePapers = 3; // Resetuj na 3 rada
+    }
+    displayPapers(); // Ponovo prikaži radove
+}
+
+loadMoreBtn.addEventListener("click", handleLoadMoreClick);
+
+// Funkcija za prikaz radova
+function displayPapers() {
+    console.log("display papers");
+    scientificContainer.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
+    const list = document.createElement("ul");
+    for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
+        const item = document.createElement("li");
+        item.innerHTML = `<a href="${allPapers[i]}" target="_blank" class="custom-link">PubMed link: ${allPapers[i]}</a>`;
+        list.appendChild(item);
+    }
+
+
+    scientificContainer.appendChild(list);
+
+    // Dodaj Show More dugme ako je potrebno
+    if (visiblePapers < allPapers.length) {
+        loadMoreBtn.style.display = "block";
+        loadMoreBtn.innerText = "Show More";
+    } else {
+        loadMoreBtn.style.display = "block";
+        loadMoreBtn.innerText = "Show Less";
+    }
+
+    // Omogućiti skrolovanje unutar scientific-paper div-a
+    scientificContainer.style.maxHeight = "300px";
+    scientificContainer.style.overflowY = "auto";
+}
+
+
 function loadGenePapers(geneName) {
-
-    basicInfo.setAttribute('style', 'display:none');
-    let allPapers = [];
-    let visiblePapers = 3; // Početno prikazivanje 3 rada
-
     // Provera da li elementi postoje
 
     if (!scientificContainer) {
@@ -550,44 +795,6 @@ function loadGenePapers(geneName) {
         scientificContainer.after(loadMoreBtn);
     }
 
-    // Funkcija za prikaz radova
-    function displayPapers() {
-        scientificContainer.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
-        const list = document.createElement("ul");
-        for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
-            const item = document.createElement("li");
-            item.innerHTML = `<a href="${allPapers[i]}" target="_blank" class="custom-link">PubMed link: ${allPapers[i]}</a>`;
-            list.appendChild(item);
-        }
-
-
-        scientificContainer.appendChild(list);
-
-        // Dodaj Show More dugme ako je potrebno
-        if (visiblePapers < allPapers.length) {
-            loadMoreBtn.style.display = "block";
-            loadMoreBtn.innerText = "Show More";
-        } else {
-            loadMoreBtn.style.display = "block";
-            loadMoreBtn.innerText = "Show Less";
-        }
-
-        // Omogućiti skrolovanje unutar scientific-paper div-a
-        scientificContainer.style.maxHeight = "300px";
-        scientificContainer.style.overflowY = "auto";
-    }
-
-    // Klik na Show More / Show Less
-    loadMoreBtn.addEventListener("click", function () {
-        console.log("clicked")
-        if (loadMoreBtn.innerText === "SHOW MORE") {
-            visiblePapers = allPapers.length; // Učitaj sve radove
-        } else {
-            visiblePapers = 3; // Resetuj na 3 rada
-        }
-        displayPapers(); // Ponovo prikaži radove
-    });
-
     // Fetch podaci sa servera
     fetch(`/get_gene_papers?gene_name=${geneName}`)
         .then(response => response.json())
@@ -595,7 +802,16 @@ function loadGenePapers(geneName) {
             console.log(data);
             if (data.pubmed_papers && data.pubmed_papers.length > 0) {
                 allPapers = data.pubmed_papers;
-                console.log(allPapers);
+                // console.log(allPapers);
+
+                setTimeout(() => {
+
+                    lavaLoader.style.display = "none"; // Sakrij lava-lamp
+                    // nonLoaderInfo.style.display = "block";
+                    nonLoaderInfo.style.opacity = "1";
+                    nonLoaderInfo.style.transform = "scale(1)"; // Postavlja ga na normalnu veličinu
+                }, 1000); // 3 sekunde trajanje
+
                 visiblePapers = 3; // Resetuj početni broj prikazanih radova
                 if(selectedObject)displayPapers();
             } else {
@@ -797,7 +1013,7 @@ function resetTooltip() {
 
 
 function create3DPlot(data) {
-  console.log("create3DPlot data:", data);
+  // console.log("create3DPlot data:", data);
 
   clearScene();
   resetTooltip();
@@ -805,6 +1021,7 @@ function create3DPlot(data) {
       toStartPosition();
   }else{
       resetCamera();
+      resetCamera()
   }
 
 
@@ -944,15 +1161,31 @@ function onClick(event) {
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
 
     if (intersections.object) {
+
         const clickedObject = intersections.object;
+        console.log(clickedObject);
         handleGeneSelection(clickedObject);
+        // toggleSphereAndShowTorus(clickedObject);
     } else {
         if (clickInterval < 300) {
             closeFunction();
         }
 
     }
+
 }
+
+
+function restoreSphereAndRemoveTorus(clickedObject, torus) {
+    // After 3 seconds, show the sphere again and remove the torus
+    clickedObject.visible = true; // Make the clicked object (sphere) visible again
+    scene.remove(torus); // Remove the torus from the scene
+    torusObject = null;
+    hiddenObject = null;
+}
+
+
+
 
 
 
@@ -1070,7 +1303,7 @@ function highlightSphereElements(selectedElement) {
         if (selectedElement.geneName) {
             const screenPosition = projectToScreen(selectedElement.position, camera);
             let geneData = getGeneData(selectedElement.geneName);
-            console.log(geneData);
+            // console.log(geneData);
             showTooltip(
                 geneData.logFC,
                 geneData.adj_P_Val,
@@ -1172,7 +1405,12 @@ function onWindowResize() {
 
 function closeFunction() {
     closeButton.classList.remove("visible");
+    if(torusObject) {
+        restoreSphereAndRemoveTorus(hiddenObject, torusObject);
+    }
     basicInfo.style.display = "block";
+    nonLoaderInfo.style.opacity = "0";
+    nonLoaderInfo.style.transform = "scale(0.95)";
     emptySidebar()
     resetTooltip();
     resetCamera();
@@ -1184,13 +1422,18 @@ function closeFunction() {
 
 // Pokretanje aplikacije
 window.addEventListener("DOMContentLoaded", () => {
+
     init();
+
     document.getElementById("myDiv").classList.add("fadeIn");
     setTimeout(function() {
         canvasLoader.style.display = "none";
         tooltip.style.display = "block";
         exploreBtn.style.display = "block";
+
     }, 2000);
+
+
     selectedObject = null
     // Kada klikneš na close dugme, sakrij ga
     closeButton.addEventListener("click", closeFunction);
@@ -1222,6 +1465,14 @@ window.addEventListener("DOMContentLoaded", () => {
         resetBtn.style.display = "block";
         toggleButton.style.display = "block";
         musicElement.style.display = "block";
+
+         // Add listener to call onMouseMove every time the mouse moves in the browser window
+        document.addEventListener('mousemove', onMouseMove, false);
+        document.addEventListener('click', onClick, false); // Dodajemo event listener za click
+
+
+
+
         music.play();
         isLoader = false
         resetCamera();

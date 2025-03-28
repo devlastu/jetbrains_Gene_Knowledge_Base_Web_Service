@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gene Knowledge Base - Volcano Plot</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Add Plotly.js CDN -->
     <script src='https://cdn.plot.ly/plotly-3.0.0.min.js'></script>
     <!-- Add GSAP from CDN -->
@@ -14,6 +15,7 @@
         {
           "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+            "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.tsl.js",
             "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.webgpu.js",
             "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
             "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
@@ -28,12 +30,13 @@
 
 
 </head>
-<body>
+<body class="loading">
+    <div id="model-data" data-model-url="{{ model_url }}"></div>
+
     <audio id="backgroundMusic" loop>
         <source src="{{ url_for('static', filename='audio/interstellar_piano.mp3') }}" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
-
 
     <div class="loader-container">
         <h1>JetBrains Gene Base</h1>
@@ -65,13 +68,8 @@
             </button>
         </div>
         <div id="elem-info" style="display: none"></div>
+        <div id="overlay"></div>
         <div id="sidebar" style="display: none">
-            <div class="lava-lamp" style="display: none">
-              <div class="bubble"></div>
-              <div class="bubble1"></div>
-              <div class="bubble2"></div>
-              <div class="bubble3"></div>
-            </div>
             <!-- Search bar and back button -->
             <label class="label">
                 <input type="text" class="search_bar" placeholder="Search for something..." />
@@ -82,7 +80,14 @@
             <div id="welcome-message">
                 <h2>Welcome Gene Knowledge Base</h2>
             </div>
-
+            <div id="lava-loader" style="display: none">
+                <div class="slice"></div>
+                <div class="slice"></div>
+                <div class="slice"></div>
+                <div class="slice"></div>
+                <div class="slice"></div>
+                <div class="slice"></div>
+            </div>
             <!-- Container for important genes -->
             <div id="important-genes">
                 <div class="header">
@@ -98,12 +103,14 @@
                 <div id="genes-list"></div>
                 <button id="moreImportantBtn">more indices</button>
             </div>
+            <div id="non-loader" style="">
+                <!-- Protein plot and scientific paper container -->
+                <div id="protein-plot"></div>
 
-            <!-- Protein plot and scientific paper container -->
-            <div id="protein-plot"></div>
-            <div id="scientific-paper"></div>
-            <button id="loadMoreBtn"></button>
-            <div id="sidebar-content"></div>
+                <div id="scientific-paper"></div>
+                <button id="loadMoreBtn"></button>
+                <div id="sidebar-content"></div>
+            </div>
         </div>
     </div>
 {#    <script src="{{ url_for('static', filename='js/index.js') }}"></script>#}
