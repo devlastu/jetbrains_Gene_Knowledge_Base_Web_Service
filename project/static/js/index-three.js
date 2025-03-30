@@ -41,17 +41,21 @@ const toggleMusicBtn = document.getElementById("toggleMusic");
 let music = document.getElementById("backgroundMusic");
 const lavaLoader = document.getElementById("lava-loader");
 const nonLoaderInfo = document.getElementById("non-loader");
-
-
+let clickedObject = null;
+let lastClicked = "";
+let clickedColor = null;
+let zoomed = false;
 let stemMesh, blossomMesh;
 let stemGeometry, blossomGeometry;
 let stemMaterial, blossomMaterial;
 const dummy = new THREE.Object3D();
-
+let light = new THREE.AmbientLight( 0xffffff, 3 );
 const _position = new THREE.Vector3();
 const _normal = new THREE.Vector3();
 const _scale = new THREE.Vector3();
-
+let loading = false;
+const searchInput = document.getElementById("searchInput");
+const resultsContainer = document.getElementById("resultsContainer");
 
 window.onload = () => {
     canvasLoader.style.display = 'block';
@@ -62,6 +66,51 @@ const initialCameraConfig = {
     position: new THREE.Vector3(0, 0, 150),
     target: new THREE.Vector3(0, 0, 0)
 };
+
+// Funkcija za filtriranje gene names
+function filterGenes(query) {
+    const searchTerm = query.toLowerCase();
+    return plotData.geneNames.filter(gene => gene.toLowerCase().includes(searchTerm));
+}
+// Funkcija za prikaz rezultata
+function displayResults(filteredGenes) {
+    resultsContainer.innerHTML = ""; // Resetuj listu
+    // console.log(filteredGenes)
+    if (filteredGenes.length === 0 || searchInput.value.trim() === "") {
+        resultsContainer.style.display = "none";
+        return;
+    }
+
+    resultsContainer.style.display = "block";
+
+    filteredGenes.forEach(gene => {
+        const item = document.createElement("div");
+        item.classList.add("result-item");
+        item.textContent = gene;
+
+        // Dodaj event listener za klik na gene
+        item.addEventListener("click", () => {
+            event.stopPropagation();  // Sprečava dalju propagaciju klika
+            searchInput.value = gene;
+            // Dodaj event listener na svaki geneDiv
+            handleGeneClick(gene);
+        });
+
+
+        resultsContainer.appendChild(item);
+    });
+}
+// Event listener za unos u search bar
+searchInput.addEventListener("input", (event) => {
+    const searchQuery = event.target.value;
+    const filteredGenes = filterGenes(searchQuery);
+    displayResults(filteredGenes);
+});
+
+searchInput.addEventListener("click", () => {
+    console.log("SearchInputClicked")
+    displayResults(plotData.geneNames); // Prikazuje sve gene na klik
+});
 
 const loaderCameraConfig = {
     position: new THREE.Vector3(-10, -20, 50),
@@ -117,6 +166,7 @@ function toggleRotation() {
 let hiddenObject = null
 let torusObject = null
 let apiCount = 1000
+let surface = null;
 let sampler;
 const ages = new Float32Array( apiCount );
 const scales = new Float32Array( apiCount );
@@ -131,7 +181,44 @@ const scaleCurve = function ( t ) {
 const easeOutCubic = function ( t ) {
     return ( -- t ) * t * t + 1;
 };
+const loader = new GLTFLoader();
 
+loader.load( modelUrl, function ( gltf ) {
+    const _stemMesh = gltf.scene.getObjectByName( 'Stem' );
+    const _blossomMesh = gltf.scene.getObjectByName( 'Blossom' );
+
+    stemGeometry = _stemMesh.geometry.clone();
+    blossomGeometry = _blossomMesh.geometry.clone();
+
+    const defaultTransform = new THREE.Matrix4()
+        .makeRotationX( Math.PI )
+        .multiply( new THREE.Matrix4().makeScale( 7, 7, 7 ) );
+
+    stemGeometry.applyMatrix4( defaultTransform );
+    blossomGeometry.applyMatrix4( defaultTransform );
+
+    stemMaterial = _stemMesh.material;
+    blossomMaterial = _blossomMesh.material;
+
+    stemMesh = new THREE.InstancedMesh( stemGeometry, stemMaterial, apiCount );
+    blossomMesh = new THREE.InstancedMesh( blossomGeometry, blossomMaterial, apiCount );
+
+    // Assign random colors to the blossoms.
+    const color = new THREE.Color();
+    const blossomPalette = [0xF20587, 0xF2D479, 0xF2C879, 0xF2B077, 0xF24405];
+
+    for ( let i = 0; i < apiCount; i ++ ) {
+        color.setHex( blossomPalette[ Math.floor( Math.random() * blossomPalette.length ) ] );
+        blossomMesh.setColorAt( i, color );
+    }
+
+    // Instance matrices will be updated every frame.
+    stemMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+    blossomMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+
+
+
+} );
 
 // Funkcija koja se poziva kada se klikne na loptu
 function toggleSphereAndShowTorus(clickedObject) {
@@ -140,82 +227,52 @@ function toggleSphereAndShowTorus(clickedObject) {
         count: apiCount,
         distribution: 'random',
         resample: resample,
-        surfaceColor: clickedObject.material.color,
+        surfaceColor: clickedColor,
     };
-    console.log(api);
-    clickedObject.visible = false;
-    hiddenObject = clickedObject;
+    // console.log(api.surfaceColor);
+
+
 
 
     // let surfaceGeometry = new THREE.BoxGeometry( 10, 10, 10 ).toNonIndexed();
     const surfaceGeometry = new THREE.TorusKnotGeometry( 10, 3, 100, 16 ).toNonIndexed();
-    torusObject = surfaceGeometry;
+
     const surfaceMaterial = new THREE.MeshLambertMaterial({
         color: api.surfaceColor,
         wireframe: false,
         transparent: false,  // Ensure transparency is off
         opacity: 1           // Set opacity to 1 for full visibilitys
     });
-    const surface = new THREE.Mesh( surfaceGeometry, surfaceMaterial );
-
-
-
+    surface = new THREE.Mesh( surfaceGeometry, surfaceMaterial );
+    torusObject = surface;
+    // Postavi torus na poziciju kliknutog objekta
+    surface.position.copy(clickedObject.position);
 
     // Scaling curve causes particles to grow quickly, ease gradually into full scale, then
     // disappear quickly. More of the particle's lifetime is spent around full scale.
 
 
-    const loader = new GLTFLoader();
 
-    loader.load( modelUrl, function ( gltf ) {
-        const _stemMesh = gltf.scene.getObjectByName( 'Stem' );
-        const _blossomMesh = gltf.scene.getObjectByName( 'Blossom' );
 
-        stemGeometry = _stemMesh.geometry.clone();
-        blossomGeometry = _blossomMesh.geometry.clone();
-
-        const defaultTransform = new THREE.Matrix4()
-            .makeRotationX( Math.PI )
-            .multiply( new THREE.Matrix4().makeScale( 7, 7, 7 ) );
-
-        stemGeometry.applyMatrix4( defaultTransform );
-        blossomGeometry.applyMatrix4( defaultTransform );
-
-        stemMaterial = _stemMesh.material;
-        blossomMaterial = _blossomMesh.material;
-
-        stemMesh = new THREE.InstancedMesh( stemGeometry, stemMaterial, apiCount );
-        blossomMesh = new THREE.InstancedMesh( blossomGeometry, blossomMaterial, apiCount );
-
-        // Assign random colors to the blossoms.
-        const color = new THREE.Color();
-        const blossomPalette = [ 0xF20587, 0xF2D479, 0xF2C879, 0xF2B077, 0xF24405 ];
-
-        for ( let i = 0; i < apiCount; i ++ ) {
-            color.setHex( blossomPalette[ Math.floor( Math.random() * blossomPalette.length ) ] );
-            blossomMesh.setColorAt( i, color );
-        }
-
-        // Instance matrices will be updated every frame.
-        stemMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
-        blossomMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
-
-        resample();
-        initialize();
-    } );
-
+    resample();
+    initialize();
     function initialize() {
-        camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 100 );
-        camera.position.set( 25, 25, 25 );
-        camera.lookAt( 0, 0, 0 );
-
-
         const pointLight = new THREE.PointLight( 0xAA8899, 2.5, 0, 0 );
         pointLight.position.set( 50, - 25, 75 );
         scene.add( pointLight );
 
-        scene.add( new THREE.AmbientLight( 0xffffff, 3 ) );
+        // Ako već imaš kameru sa postavljenim setupom, samo promeni poziciju i lookAt
+        camera.position.set(clickedObject.position.x + 25, clickedObject.position.y + 25, clickedObject.position.z + 25);
+        camera.lookAt(clickedObject.position);
 
+        zoomToElement(clickedObject, true);
+
+        scene.add(light);
+        stemMesh.position.copy(clickedObject.position);
+        blossomMesh.position.copy(clickedObject.position);
+
+        clickedObject.visible = false;
+        hiddenObject = clickedObject;
         scene.add( stemMesh );
         scene.add( blossomMesh );
         scene.add( surface );
@@ -224,19 +281,19 @@ function toggleSphereAndShowTorus(clickedObject) {
 
     function resample() {
         const vertexCount = surface.geometry.getAttribute( 'position' ).count;
-        console.info( 'Sampling ' + apiCount + ' points from a surface with ' + vertexCount + ' vertices...' );
-        console.time( '.build()' );
+        // console.info( 'Sampling ' + apiCount + ' points from a surface with ' + vertexCount + ' vertices...' );
+        // console.time( '.build()' );
         sampler = new MeshSurfaceSampler( surface )
             .setWeightAttribute( api.distribution === 'weighted' ? 'uv' : null )
             .build();
-        console.timeEnd( '.build()' );
-        console.time( '.sample()' );
+        // console.timeEnd( '.build()' );
+        // console.time( '.sample()' );
         for ( let i = 0; i < apiCount; i ++ ) {
             ages[ i ] = Math.random();
             scales[ i ] = scaleCurve( ages[ i ] );
             resampleParticle( i );
         }
-        console.timeEnd( '.sample()' );
+        // console.timeEnd( '.sample()' );
         stemMesh.instanceMatrix.needsUpdate = true;
         blossomMesh.instanceMatrix.needsUpdate = true;
     }
@@ -311,13 +368,20 @@ function init() {
     }
 }
 
+function rotateObject(){
+    if (!torusObject) return;
+    const time = Date.now() * 0.001;
+    torusObject.rotation.x = Math.sin( time / 4 );
+    stemMesh.rotation.x = Math.sin( time / 4 );
+    blossomMesh.rotation.x = Math.sin( time / 4 );
+    torusObject.rotation.y = Math.sin( time / 2 );
+    stemMesh.rotation.y = Math.sin( time / 2 );
+    blossomMesh.rotation.y = Math.sin( time / 2 );
+}
+
 function render() {
-    if ( stemMesh && blossomMesh ) {
-
-        const time = Date.now() * 0.001;
-
-        scene.rotation.x = Math.sin( time / 4 );
-        scene.rotation.y = Math.sin( time / 2 );
+    if ( stemMesh && blossomMesh && zoomed && torusObject) {
+        rotateObject(); // Pozivamo funkciju za rotaciju objekta
 
         for ( let i = 0; i < apiCount; i ++ ) {
 
@@ -331,14 +395,17 @@ function render() {
         stemMesh.computeBoundingSphere();
         blossomMesh.computeBoundingSphere();
 
+    }else{
+        scene.rotation.x = 0;
     }
+    // console.log(scene.rotation.x, scene.rotation.y)
+
 
     renderer.render( scene, camera );
 }
 // Animacija sa CameraControls
 function animate() {
     requestAnimationFrame(animate);
-
       // Ako je rotacija omogućena, rotiraj scenu
     if (isRotating) {
         // console.log("Rotating...");
@@ -388,51 +455,99 @@ function fetchProteinConcentrationData(geneName) {
 
 
 function handleGeneSelection(clickedObject) {
+    console.log("📢 handleGeneSelection POZVAN!");
+    loading = true;
+    if (!clickedObject) {
+        console.error("❌ Kliknuti objekat nije definisan! Provera failed.");
+        return;
+    }
+
+    console.log("✅ Kliknuti objekat:", clickedObject);
 
     isRotating = false;
-    // console.log("Ovdje ga na false");
     lavaLoader.style.display = 'block';
     basicInfo.setAttribute('style', 'display:none');
+
     // Vraćanje boje originalnog objekta
     restoreOriginalColor();
+    console.log("🎨 Boja originalnog objekta vraćena.");
 
     // Odabir trenutnog objekta
     selectedObject = clickedObject;
-    originalColor.copy(selectedObject.material.color);
+    if (!selectedObject.material || !selectedObject.material.color) {
+        console.error("❌ Kliknuti objekat nema validan material ili color.");
+        return;
+    }
+    if(selectedObject.material.color) {
+        originalColor.copy(selectedObject.material.color);
+        console.log("🎨 Sačuvana originalna boja objekta:", originalColor);
+    }
 
     // Osvetljavanje selektovanog objekta
     lightenColor(selectedObject.material);
+    console.log("💡 Objekat osvetljen.");
 
     // Smanjivanje drugih objekata na sceni
     dimOtherElements(scene, clickedObject);
+    console.log("📉 Ostali objekti prigušeni.");
 
-    // Zoom u selektovani objekat
-    zoomToElement(clickedObject, true);
+    toggleSphereAndShowTorus(clickedObject);
+    console.log("🛠️ toggleSphereAndShowTorus pozvan.");
 
     // Učitavanje podataka o proteinu
     let geneName = clickedObject.geneName;
-    if (geneName) {
-        fetchProteinConcentrationData(geneName)
-            .then(proteinData => {
-                if (proteinData.young && proteinData.old) {
-                    // Učitavanje naučnih radova i kreiranje grafikona
-                    loadGenePapers(geneName);
-                    createProteinPLot(proteinData);
-                    proteinPlot.setAttribute('style', 'display: block;');
-
-                    // Popunjavanje podataka u odgovarajući interfejs
-                    fillInData(proteinData);
-
-                    // Prikazivanje dugmeta za zatvaranje
-                    closeButton.classList.add("visible");
-                } else {
-                    console.error("Error: Missing data for plotting.");
-                }
-            })
-            .catch(error => console.error("Error fetching protein concentration data:", error));
+    if (!geneName) {
+        console.error("❌ Kliknuti objekat nema `geneName`!");
+        return;
     }
+
+    console.log(`🔬 Učitavanje podataka za gen: ${geneName}`);
+
+    fetchProteinConcentrationData(geneName)
+        .then(proteinData => {
+            console.log("✅ Podaci o proteinu dobijeni:", proteinData);
+
+            if (proteinData.young && proteinData.old) {
+                console.log("📊 Podaci za mlade i stare postoje. Pravimo grafikon...");
+
+                // Učitavanje naučnih radova i kreiranje grafikona
+                loadGenePapers(geneName);
+                createProteinPLot(proteinData);
+                proteinPlot.setAttribute('style', 'display: block;');
+
+                // Popunjavanje podataka u odgovarajući interfejs
+                fillInData(proteinData);
+
+                // Prikazivanje dugmeta za zatvaranje
+                closeButton.classList.add("visible");
+                console.log("✅ Podaci uspešno prikazani!");
+
+            } else {
+                console.error("❌ Error: Nedostaju podaci za prikazivanje grafikona!");
+            }
+        })
+        .catch(error => console.error("❌ Error prilikom dohvatanja podataka o proteinu:", error));
 }
 
+
+function handleGeneClick(geneSymbol) {
+    isRotating = false;
+    console.log(geneSymbol);
+    const geneData = localStorage.getItem(geneSymbol); // Preuzimamo podatke iz localStorage
+
+    if (!geneData) {
+        console.error(`Gen ${geneSymbol} nije pronađen u localStorage.`);
+        return;
+    }
+
+    const geneInfo = JSON.parse(geneData); // Parsiramo JSON string iz localStorage
+    const { x, y, z } = geneInfo.position; // Ekstraktujemo poziciju gena
+
+    // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
+    const targetElement = get3DObjectByPosition(x, y, z);
+    console.log(targetElement);
+    handleGeneSelection(targetElement);
+}
 
 function displayImportantGenes(genes, start, end) {
     const genesListContainer = document.getElementById('genes-list');
@@ -483,27 +598,11 @@ function displayImportantGenes(genes, start, end) {
         geneDiv.appendChild(adjPValDiv);
 
 
-        // Dodaj event listener za klik
-        geneDiv.addEventListener('click', function(event) {
-            const geneSymbol = gene.geneSymbol; // Dobijamo simbol gena koji je kliknut
-            isRotating = false;
-            const geneData = localStorage.getItem(geneSymbol); // Preuzimamo podatke iz localStorage
 
-            if (!geneData) {
-                console.error(`Gen ${geneSymbol} nije pronađen u localStorage.`);
-                return;
-            }
-
-            const geneInfo = JSON.parse(geneData); // Parsiramo JSON string iz localStorage
-            const { x, y, z } = geneInfo.position; // Ekstraktujemo poziciju gena
-
-            console.log(`Gen ${geneSymbol} pozicija:`, x, y, z);
-
-            // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
-            const targetElement = get3DObjectByPosition(x, y, z);
-
-            handleGeneSelection(targetElement);
+        geneDiv.addEventListener("click", () => {
+            handleGeneClick(gene.geneSymbol);
         });
+
 
         // Dodaj geneDiv u container
         genesListContainer.appendChild(geneDiv);
@@ -583,7 +682,7 @@ function onGeneSelection(geneName) {
 }
 
 function fillInData(proteinData) {
-
+    console.log("fillInData")
     if (proteinData && proteinData.additionalInfo) {
         const additionalInfo = proteinData.additionalInfo;
         let geneData = getGeneData(additionalInfo.EntrezGeneSymbol)
@@ -654,6 +753,7 @@ function toggleMoreLess() {
 
 // Funkcija za kreiranje 2D plot-a
 function createProteinPLot(data) {
+    console.log("createProteinPLot")
     // Osiguraj da podaci postoje
     if (!data.young || !data.old) {
         console.error("Error: Missing data for plotting.");
@@ -734,7 +834,7 @@ function createProteinPLot(data) {
 let allPapers = [];
 let visiblePapers = 3; // Početno prikazivanje 3 rada
 function handleLoadMoreClick() {
-    console.log("clicked")
+    // console.log("clicked")
     console.log(loadMoreBtn.innerText)
     if (loadMoreBtn.innerText === "SHOW MORE") {
         console.log("show more")
@@ -750,7 +850,7 @@ loadMoreBtn.addEventListener("click", handleLoadMoreClick);
 
 // Funkcija za prikaz radova
 function displayPapers() {
-    console.log("display papers");
+    // console.log("display papers");
     scientificContainer.innerHTML = "Scientific papers related to gene:"; // Očisti prethodni sadržaj
     const list = document.createElement("ul");
     for (let i = 0; i < Math.min(visiblePapers, allPapers.length); i++) {
@@ -779,6 +879,7 @@ function displayPapers() {
 
 function loadGenePapers(geneName) {
     // Provera da li elementi postoje
+    console.log("loadGenePapers")
 
     if (!scientificContainer) {
         console.error("Error: Element #scientific-paper not found.");
@@ -799,7 +900,7 @@ function loadGenePapers(geneName) {
     fetch(`/get_gene_papers?gene_name=${geneName}`)
         .then(response => response.json())
         .then(data => {
-            console.log(data);
+            // console.log(data);
             if (data.pubmed_papers && data.pubmed_papers.length > 0) {
                 allPapers = data.pubmed_papers;
                 // console.log(allPapers);
@@ -807,10 +908,11 @@ function loadGenePapers(geneName) {
                 setTimeout(() => {
 
                     lavaLoader.style.display = "none"; // Sakrij lava-lamp
+                    loading = false;
                     // nonLoaderInfo.style.display = "block";
                     nonLoaderInfo.style.opacity = "1";
                     nonLoaderInfo.style.transform = "scale(1)"; // Postavlja ga na normalnu veličinu
-                }, 1000); // 3 sekunde trajanje
+                }, 250); // 3 sekunde trajanje
 
                 visiblePapers = 3; // Resetuj početni broj prikazanih radova
                 if(selectedObject)displayPapers();
@@ -845,19 +947,32 @@ function loadAndCreatePlot() {
 
 
 function lightenColor(material, factor = 0.2) {
+    console.log("lightenColor pozvan sa faktorom:", factor);
     const color = new THREE.Color(material.color);
+    console.log("Originalna boja:", material.color);
+
     color.offsetHSL(0, 0, factor); // Povećava svetlinu
     material.color.set(color);
+
+    console.log("Nova boja:", color);
 }
 
+
 function restoreOriginalColor() {
-    if (selectedObject) {
-        selectedObject.material.color.set(originalColor); // Vrati staru boju
+    console.log("restoreOriginalColor pozvan.");
+    if (hiddenObject) {
+        console.log("Obnovljena boja objekta.");
+        hiddenObject.material.color.set(originalColor); // Vrati staru boju
+        console.log("Stara boja postavljena:", originalColor);
         selectedObject = null;
+    } else {
+        console.log("Nema skrivenog objekta za vraćanje boje.");
     }
 }
 
+
 function dimOtherElements(scene, selectedObject, dimOpacity = 0.3, originalOpacity = 1) {
+    console.log("dimOtherElements")
     scene.traverse((object) => {
         if (object.isMesh && object.material) {
             if (object === selectedObject) {
@@ -897,7 +1012,7 @@ function restoreAllColors(){
 
 
 
-let axesHelper;
+
 // Kreiranje 2D plot-a
 function create2DPlot(data) {
     console.log("create2DPlot data:", data);
@@ -1027,7 +1142,7 @@ function create3DPlot(data) {
 
   const minValue = Math.min(...data.y);
   const maxValue = Math.max(...data.y);
-  console.log(maxValue);
+  // console.log(maxValue);
 
   points = [];
 
@@ -1103,6 +1218,8 @@ function onMouseMove(event) {
 
 // Funkcija koja vraća sve u prethodno stanje
 function emptySidebar() {
+    searchInput.value = "";
+    console.log("emptySidebar")
     // Vratiti originalnu boju prethodno selektovanog objekta
     if (selectedObject) {
         restoreOriginalColor(); // Vrati boju selektovanog objekta
@@ -1123,8 +1240,6 @@ function emptySidebar() {
 
     // Sakrij dugme za zatvaranje
     closeButton.classList.remove("visible");
-
-    console.log("All changes have been restored to their original state.");
 }
 
 
@@ -1160,15 +1275,26 @@ function onClick(event) {
     mousePointer = getMouseVector2(event, window);
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
 
-    if (intersections.object) {
+    if (intersections.object && !loading) {
 
-        const clickedObject = intersections.object;
-        console.log(clickedObject);
+
+        clickedObject = intersections.object;
+        if(clickedObject.geneName === lastClicked.geneName) return;
+        if (lastClicked){
+            restoreSphereAndRemoveTorus(lastClicked, torusObject, stemMesh, blossomMesh);
+        }
+        lastClicked = clickedObject;
+        clickedColor = clickedObject.material.color;
+
+
+        // console.log(clickedObject);
+        loading = true;
         handleGeneSelection(clickedObject);
-        // toggleSphereAndShowTorus(clickedObject);
+
     } else {
         if (clickInterval < 300) {
             closeFunction();
+
         }
 
     }
@@ -1176,12 +1302,21 @@ function onClick(event) {
 }
 
 
-function restoreSphereAndRemoveTorus(clickedObject, torus) {
+function restoreSphereAndRemoveTorus(clickedObject, torus, stem, blossom) {
     // After 3 seconds, show the sphere again and remove the torus
+    // console.log("Before ",clickedObject.material.color);
     clickedObject.visible = true; // Make the clicked object (sphere) visible again
+    clickedObject.material.color = clickedColor;
+    // console.log("After ",clickedObject.material.color);
     scene.remove(torus); // Remove the torus from the scene
+    scene.remove(stem);
+    scene.remove(blossom);
     torusObject = null;
+    clickedObject = null;
+    // console.log(surface)
     hiddenObject = null;
+    scene.remove(light);
+
 }
 
 
@@ -1249,23 +1384,47 @@ export function getSphereElements(objectList) {
 
 
 function zoomToElement(targetElement, enableTransition) {
-    if (!targetElement) return;
-    // Check if the target element has a bounding box
-    const boundingBox = new THREE.Box3().setFromObject(targetElement);
+    if (!targetElement) {
+        console.error("❌ zoomToElement: targetElement nije definisan!");
+        return;
+    }
 
-    // Use the cameraControls.fitToBox method to zoom to the target element
+    console.log("🔍 zoomToElement pozvan za:", targetElement);
+
+    zoomed = true;
+
+    // Provera da li objekat ima bounding box
+    const boundingBox = new THREE.Box3().setFromObject(targetElement);
+    console.log("📦 Bounding Box:", boundingBox);
+
+    if (boundingBox.isEmpty()) {
+        console.warn("⚠️ zoomToElement: Bounding box je prazan!");
+        return;
+    }
+
+    console.log("📸 Pozivamo cameraControls.fitToBox sa opcijama:");
+    console.log({
+        cover: false,
+        paddingTop: 20,
+        paddingLeft: 20,
+        paddingBottom: 20,
+        paddingRight: 20
+    });
+
     cameraControls.fitToBox(boundingBox, enableTransition, {
-        cover: false, // Set to false to prevent the camera from fully filling the screen with the element
-        paddingTop: 2, // Optional: Add a little padding to the top
-        paddingLeft: 2, // Optional: Add a little padding to the left
-        paddingBottom:2, // Optional: Add a little padding to the bottom
-        paddingRight: 2 // Optional: Add a little padding to the right
+        cover: false, // Sprečava da element zauzme ceo ekran
+        paddingTop: 20,
+        paddingLeft: 20,
+        paddingBottom: 20,
+        paddingRight: 20
     }).then(() => {
-        console.log("Zoom to element completed!");
+        console.log("✅ Zoom uspešno završen!");
     }).catch((error) => {
-        console.error("Error in zoomToElement:", error);
+        console.error("❌ Greška u zoomToElement:", error);
     });
 }
+
+
 
 function getGeneData(geneName) {
 
@@ -1404,9 +1563,12 @@ function onWindowResize() {
 }
 
 function closeFunction() {
+    if(loading) return;
+    clickedObject = null;
     closeButton.classList.remove("visible");
     if(torusObject) {
-        restoreSphereAndRemoveTorus(hiddenObject, torusObject);
+        // console.log("torus hidden")
+        restoreSphereAndRemoveTorus(hiddenObject, torusObject, stemMesh, blossomMesh);
     }
     basicInfo.style.display = "block";
     nonLoaderInfo.style.opacity = "0";
@@ -1416,6 +1578,7 @@ function closeFunction() {
     resetCamera();
     restoreAllColors();
     isRotating = true;
+    zoomed = false;
 }
 
 
@@ -1457,6 +1620,14 @@ window.addEventListener("DOMContentLoaded", () => {
     // Dodajemo event listener za dugme
     testPageButton.addEventListener('click', function() {
         window.location.href =  '/test-page'; // Pozivamo Flask rutu koja vodi do test.html
+    });
+
+    // Sakrij listu kada se klikne van nje
+    document.addEventListener("click", (event) => {
+        if (!event.target.closest(".search-container")) {
+            searchInput.value = "";
+            resultsContainer.style.display = "none";
+        }
     });
 
     exploreBtn.addEventListener("click", function () {

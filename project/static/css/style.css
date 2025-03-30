@@ -139,6 +139,71 @@ html {
   color: rgb(111, 115, 119);
 }
 
+
+.results {
+    position: absolute;
+    top: 100%;
+    width: 100%;
+    max-height: 30vh; /* 30% viewport height */
+    overflow-y: auto;
+    border-radius: 5px;
+    background: rgba(37, 37, 37, 0.95);
+    border: 1px solid rgba(140, 48, 97, 0.78);
+    border-top: none;
+    z-index: 9999;
+}
+/* Poboljšanje izgleda scrolla */
+.results::-webkit-scrollbar {
+    width: 4px;
+}
+
+.results::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+}
+
+.results::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.5);
+}
+.result-item {
+    position: relative; /* Neophodno za apsolutno pozicioniranje pseudo-elementa */
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(140, 48, 97, 0.78);
+    overflow: hidden; /* Sprečava curenje blura izvan okvira */
+}
+
+.result-item:hover {
+    background: rgba(37, 37, 37, 0.84);
+    color: white;
+}
+
+/* Precizno pozicioniran blur efekat */
+.result-item:hover::after {
+    content: "View Gene";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: white;
+    background: rgba(0, 0, 0, 0.4); /* Lagano zatamni pozadinu */
+    backdrop-filter: blur(3px); /* Manji blur da ne bude prejak */
+    border-radius: 5px; /* Prati border-radius elementa */
+    opacity: 1;
+    transition: opacity 0.2s ease-in-out;
+}
+
+
+.result-item:hover::after {
+    opacity: 1; /* Prikazuje blur efekat i tekst na hover */
+}
 canvas {
     display: block;
     background-color: #000; /* Set a background color for the canvas */
@@ -218,7 +283,7 @@ button {
   color: #fff;
   overflow: hidden;
   box-shadow:
-    20px 20px 60px rgba(140, 48, 97),
+    20px 20px 60px rgba(140, 48, 97, 0.78),
     -20px -20px 60px rgba(211, 144, 75);
   -webkit-transition: all 0.2s ease-in;
   -moz-transition: all 0.2s ease-in;

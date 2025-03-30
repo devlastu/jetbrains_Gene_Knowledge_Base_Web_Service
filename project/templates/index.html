@@ -71,9 +71,11 @@
         <div id="overlay"></div>
         <div id="sidebar" style="display: none">
             <!-- Search bar and back button -->
-            <label class="label">
-                <input type="text" class="search_bar" placeholder="Search for something..." />
+            <label class="label search-container">
+                <input type="text" class="search_bar" id="searchInput" placeholder="Search for something..." />
+                <div class="results" id="resultsContainer"></div>
             </label>
+
             <button id="close-info">Back</button>
 
             <!-- Title above the sidebar content -->
