@@ -23,7 +23,7 @@ def get_gene_papers():
     if not gene_name:
         return jsonify({"error": "Gene name is required"}), 400
 
-    # 1. Pronaći ID gena
+    # Find the ID of the Gene
     try:
         response = requests.get(f"{MYGENE_API_BASE}/query?q=symbol:{gene_name}")
         response.raise_for_status()
@@ -36,7 +36,7 @@ def get_gene_papers():
 
     gene_id = data["hits"][0]["_id"]
 
-    # 2. Dohvatiti podatke o genu pomoću ID-ja
+    # 2.Fetch the data using gene ID
     try:
         response = requests.get(f"{MYGENE_API_BASE}/gene/{gene_id}")
         response.raise_for_status()
@@ -44,7 +44,7 @@ def get_gene_papers():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch gene info: {str(e)}"}), 500
 
-    # 3. Ekstraktovati samo PubMed ID-jeve
+    # 3. Extract PubMedId-s
     pubmed_ids = set()
     # Iz `generif`
     if "generif" in gene_data:
@@ -52,33 +52,10 @@ def get_gene_papers():
             if "pubmed" in entry:
                 pubmed_ids.add(entry["pubmed"])
 
-    # 4. Kreirati PubMed linkove
+    # 4.Create PubMed links
     pubmed_links = [f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}/" for pubmed_id in pubmed_ids]
 
-    # # 5. Ekstraktovati heading-title sa svake PubMed stranice
-    # pubmed_papers = []
-    # for link in pubmed_links:
-    #     try:
-    #         response = requests.get(link)
-    #         response.raise_for_status()
-    #
-    #         # Parsiranje HTML-a stranice
-    #         soup = BeautifulSoup(response.content, 'html.parser')
-    #         print("ovjde sam")
-    #         # Pretražiti HTML za element koji sadrži naslov (obično je u <h1> tagu)
-    #         title_tag = soup.find('h1', class_='heading-title')
-    #         title = title_tag.get_text(strip=True) if title_tag else "No title found"
-    #
-    #         pubmed_papers.append({
-    #             "link": link,
-    #             "title": title
-    #         })
-    #     except requests.exceptions.RequestException as e:
-    #         pubmed_papers.append({
-    #             "link": link,
-    #             "title": f"Failed to fetch title: {str(e)}"
-    #         })
-    # print(pubmed_papers)
+
     return jsonify({"gene_name": gene_name, "pubmed_papers": pubmed_links})
 
 
@@ -90,12 +67,12 @@ def plot_data():
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
-        # Učitavanje podataka
+        # Loading the data
         s4b_data = read_excel_data(file_path, "S4B limma results")
 
         print(f"Prije normalizacije x: {s4b_data['logFC'].head()}")
 
-        # Računanje -log10 za adj.P.Val
+        # Calculating -log10 for adj.P.Val
         s4b_data['-log10(adj.P.Val)'] = -np.log10(s4b_data['adj.P.Val'])
         s4b_data['Z_value'] = np.random.uniform(-3, 3, len(s4b_data))
 
@@ -105,7 +82,7 @@ def plot_data():
         # Display the filtered important genes
         print(f"Important: {important_genes[['EntrezGeneSymbol', 'logFC', 'adj.P.Val']]}")
 
-        # Ekstrakcija podataka koji su potrebni za 3D plot
+        # Extraxt the data for 3D
         plot_data = {
             'x': s4b_data['logFC'].tolist(),
             'y': s4b_data['-log10(adj.P.Val)'].tolist(),
@@ -134,37 +111,35 @@ def plot_data():
 
 
 
-
+#View for generating 2D Protein Data plot
 @app.route('/protein_concentration_data')
 def protein_concentration_data():
     gene_name = request.args.get('geneName')  # Uzimanje imena gena iz query parametra
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
-        # Učitavanje podataka iz obe relevantne tabele
+        #Loading data from both data sheets
         s4a_data = read_excel_data(file_path, "S4A values")
         s4b_data = read_excel_data(file_path, "S4B limma results")  # Dodajemo ekspresione podatke
 
-        # Filtriranje po genu
+        # Filtering on gene
         gene_data = s4a_data[s4a_data['EntrezGeneSymbol'] == gene_name]
         gene_exp_data = s4b_data[s4b_data['EntrezGeneSymbol'] == gene_name]
 
-        # Ako nema podataka o proteinu u S4A tabeli
         if gene_data.empty:
             return jsonify({"error": f"No concentration data found for gene {gene_name}"}), 404
 
-        # Ako nema podataka o ekspresiji u S4B tabeli
         if gene_exp_data.empty:
             return jsonify({"error": f"No expression data found for gene {gene_name}"}), 404
 
-        # Ekstrakcija podataka o proteinima (mladi i stari donori)
+        #Extraxt data about old and young donors for protein plot
         young_columns = [col for col in gene_data.columns if 'YD' in col]
         old_columns = [col for col in gene_data.columns if 'OD' in col or 'PD' in col]
 
         young_donors = gene_data[young_columns].values.flatten().tolist()
         old_donors = gene_data[old_columns].values.flatten().tolist()
 
-        # Dodatne informacije o genu iz S4A tabele
+        #Bonus info for displaying in web app
         additional_info = {
             "TargetFullName": gene_data["TargetFullName"].values[0],
             "Target": gene_data["Target"].values[0],
@@ -176,7 +151,7 @@ def protein_concentration_data():
             "Dilution": gene_data["Dilution"].values[0],
         }
 
-        # Dodatne informacije o ekspresiji gena iz S4B tabele
+        # Bonus info on gene expression from data sheet
         expression_info = {
             "logFC": gene_exp_data["logFC"].values[0],  # Log fold change
             "adj.P.Val": gene_exp_data["adj.P.Val"].values[0],  # P-vrednost nakon korekcije
@@ -186,11 +161,11 @@ def protein_concentration_data():
             "AveExpr": gene_exp_data["AveExpr"].values[0]  # Prosečna ekspresija
         }
 
-        # Zamena mogućih NaN vrednosti sa "N/A"
+        #Replacing possible NaN values
         additional_info = {k: (v if pd.notna(v) else "N/A") for k, v in additional_info.items()}
         expression_info = {k: (v if pd.notna(v) else "N/A") for k, v in expression_info.items()}
 
-        # Slanje podataka kao JSON
+        # Sending data as a JSON
         return jsonify({
             "youngDonors": young_donors,
             "oldDonors": old_donors,
@@ -207,10 +182,6 @@ def index():
     model_url = url_for('static', filename='models/gltf/Flower/Flower.glb')
     return render_template('index.html', model_url=model_url)
 
-@app.route('/test-page')
-def test_page():
-    model_url = url_for('static', filename='models/gltf/Flower/Flower.glb')
-    return render_template('protein-look.html', model_url=model_url)
 
 if __name__ == '__main__':
     app.run(debug=True)

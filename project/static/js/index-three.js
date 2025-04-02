@@ -91,7 +91,9 @@ function displayResults(filteredGenes) {
         // Dodaj event listener za klik na gene
         item.addEventListener("click", () => {
             event.stopPropagation();  // Sprečava dalju propagaciju klika
+            console.log(gene);
             searchInput.value = gene;
+            resultsContainer.style.display = "none";
             // Dodaj event listener na svaki geneDiv
             handleGeneClick(gene);
         });
@@ -108,7 +110,6 @@ searchInput.addEventListener("input", (event) => {
 });
 
 searchInput.addEventListener("click", () => {
-    console.log("SearchInputClicked")
     displayResults(plotData.geneNames); // Prikazuje sve gene na klik
 });
 
@@ -165,11 +166,11 @@ function toggleRotation() {
 
 let hiddenObject = null
 let torusObject = null
-let apiCount = 1000
+let apiCount = 500
 let surface = null;
 let sampler;
-const ages = new Float32Array( apiCount );
-const scales = new Float32Array( apiCount );
+let ages;
+let scales;
 const modelDataDiv = document.getElementById("model-data");
 const modelUrl = modelDataDiv.getAttribute("data-model-url");
 
@@ -216,8 +217,6 @@ loader.load( modelUrl, function ( gltf ) {
     stemMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
     blossomMesh.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
 
-
-
 } );
 
 // Funkcija koja se poziva kada se klikne na loptu
@@ -231,11 +230,105 @@ function toggleSphereAndShowTorus(clickedObject) {
     };
     // console.log(api.surfaceColor);
 
+    console.log(clickedObject);
 
+    function getRadius(clickedObject) {
+        if (!clickedObject || !clickedObject.geneName) {
+            console.warn("getRadius: clickedObject or geneName is invalid", clickedObject);
+            return 3; // Default radius ako objekat nije validan
+        }
 
+        // Dohvati podatke iz localStorage
+        let item = localStorage.getItem(clickedObject.geneName);
+        if (!item) {
+            console.warn(`getRadius: No data found in localStorage for key '${clickedObject.geneName}'`);
+            return 3;
+        }
 
+        try {
+            item = JSON.parse(item); // Parsiranje JSON stringa u objekat
+        } catch (error) {
+            console.error(`getRadius: Failed to parse JSON from localStorage for '${clickedObject.geneName}'`, error);
+            return 3;
+        }
+
+        // Provera da li postoji pozicija
+        if (!item.position || typeof item.position.y !== 'number') {
+            console.warn("getRadius: No valid position.y found in item", item);
+            return 3;
+        }
+
+        let y = item.position.y;
+        console.log(`Gene: ${clickedObject.geneName}, Y position from localStorage:`, y);
+
+        const yMin = -40;
+        const yMax = 78;
+
+        // Normalizacija y vrednosti između 0 i 1
+        let normalizedY = (y - yMin) / (yMax - yMin);
+        normalizedY = Math.min(1, Math.max(0, normalizedY)); // Osigurava da je u opsegu [0, 1]
+
+        // Skaliranje u opsegu [3, 18] umesto [1, 18]
+        let radius = 4 + normalizedY * (15 - 4);
+        console.log(`Computed radius = ${radius} for y = ${y}`);
+
+        return radius;
+    }
+    function getCount(clickedObject) {
+        if (!clickedObject || !clickedObject.geneName) {
+            console.warn("getValueBasedOnY: clickedObject or geneName is invalid", clickedObject);
+            return 500; // Default vrednost ako objekat nije validan
+        }
+
+        // Dohvati podatke iz localStorage
+        let item = localStorage.getItem(clickedObject.geneName);
+        if (!item) {
+            console.warn(`getValueBasedOnY: No data found in localStorage for key '${clickedObject.geneName}'`);
+            return 500;
+        }
+
+        try {
+            item = JSON.parse(item); // Parsiranje JSON stringa u objekat
+        } catch (error) {
+            console.error(`getValueBasedOnY: Failed to parse JSON from localStorage for '${clickedObject.geneName}'`, error);
+            return 500;
+        }
+
+        // Provera da li postoji pozicija
+        if (!item.position || typeof item.position.y !== 'number') {
+            console.warn("getValueBasedOnY: No valid position.y found in item", item);
+            return 500;
+        }
+
+        let y = item.position.y;
+        console.log(`Gene: ${clickedObject.geneName}, Y position from localStorage:`, y);
+
+        const yMin = -40;
+        const yMax = 78;
+
+        // Normalizacija y vrednosti između 0 i 1
+        let normalizedY = (y - yMin) / (yMax - yMin);
+        normalizedY = Math.min(1, Math.max(0, normalizedY)); // Osigurava da je u opsegu [0, 1]
+
+        // Skaliranje u opsegu [500, 1000]
+        let value = 500 + normalizedY * (1000 - 500);
+        console.log(`Computed value = ${value} for y = ${y}`);
+
+        return value;
+    }
+
+    apiCount = getCount(clickedObject);
+    ages = new Float32Array( apiCount );
+    scales = new Float32Array( apiCount );
+
+    let radius = getRadius(clickedObject);
+    let tube = radius/3
+
+    // let radius = 10;
+    // let tube = radius/3
+    console.log(radius);
     // let surfaceGeometry = new THREE.BoxGeometry( 10, 10, 10 ).toNonIndexed();
-    const surfaceGeometry = new THREE.TorusKnotGeometry( 10, 3, 100, 16 ).toNonIndexed();
+    const surfaceGeometry = new THREE.TorusKnotGeometry( radius, tube, 100, 16 ).toNonIndexed();
 
     const surfaceMaterial = new THREE.MeshLambertMaterial({
         color: api.surfaceColor,
@@ -455,14 +548,14 @@ function fetchProteinConcentrationData(geneName) {
 
 
 function handleGeneSelection(clickedObject) {
-    console.log("📢 handleGeneSelection POZVAN!");
+    // console.log("📢 handleGeneSelection POZVAN!");
     loading = true;
     if (!clickedObject) {
         console.error("❌ Kliknuti objekat nije definisan! Provera failed.");
         return;
     }
 
-    console.log("✅ Kliknuti objekat:", clickedObject);
+    // console.log("✅ Kliknuti objekat:", clickedObject);
 
     isRotating = false;
     lavaLoader.style.display = 'block';
@@ -470,7 +563,7 @@ function handleGeneSelection(clickedObject) {
 
     // Vraćanje boje originalnog objekta
     restoreOriginalColor();
-    console.log("🎨 Boja originalnog objekta vraćena.");
+    // console.log("🎨 Boja originalnog objekta vraćena.");
 
     // Odabir trenutnog objekta
     selectedObject = clickedObject;
@@ -480,19 +573,20 @@ function handleGeneSelection(clickedObject) {
     }
     if(selectedObject.material.color) {
         originalColor.copy(selectedObject.material.color);
-        console.log("🎨 Sačuvana originalna boja objekta:", originalColor);
+        // console.log("🎨 Sačuvana originalna boja objekta:", originalColor);
     }
 
     // Osvetljavanje selektovanog objekta
     lightenColor(selectedObject.material);
-    console.log("💡 Objekat osvetljen.");
+    // console.log("💡 Objekat osvetljen.");
+
 
     // Smanjivanje drugih objekata na sceni
     dimOtherElements(scene, clickedObject);
-    console.log("📉 Ostali objekti prigušeni.");
+    // console.log("📉 Ostali objekti prigušeni.");
 
     toggleSphereAndShowTorus(clickedObject);
-    console.log("🛠️ toggleSphereAndShowTorus pozvan.");
+    // console.log("🛠️ toggleSphereAndShowTorus pozvan.");
 
     // Učitavanje podataka o proteinu
     let geneName = clickedObject.geneName;
@@ -501,14 +595,14 @@ function handleGeneSelection(clickedObject) {
         return;
     }
 
-    console.log(`🔬 Učitavanje podataka za gen: ${geneName}`);
+    // console.log(`🔬 Učitavanje podataka za gen: ${geneName}`);
 
     fetchProteinConcentrationData(geneName)
         .then(proteinData => {
-            console.log("✅ Podaci o proteinu dobijeni:", proteinData);
+            // console.log("✅ Podaci o proteinu dobijeni:", proteinData);
 
             if (proteinData.young && proteinData.old) {
-                console.log("📊 Podaci za mlade i stare postoje. Pravimo grafikon...");
+                // console.log("📊 Podaci za mlade i stare postoje. Pravimo grafikon...");
 
                 // Učitavanje naučnih radova i kreiranje grafikona
                 loadGenePapers(geneName);
@@ -520,7 +614,7 @@ function handleGeneSelection(clickedObject) {
 
                 // Prikazivanje dugmeta za zatvaranje
                 closeButton.classList.add("visible");
-                console.log("✅ Podaci uspešno prikazani!");
+                // console.log("✅ Podaci uspešno prikazani!");
 
             } else {
                 console.error("❌ Error: Nedostaju podaci za prikazivanje grafikona!");
@@ -532,7 +626,7 @@ function handleGeneSelection(clickedObject) {
 
 function handleGeneClick(geneSymbol) {
     isRotating = false;
-    console.log(geneSymbol);
+    // console.log(geneSymbol);
     const geneData = localStorage.getItem(geneSymbol); // Preuzimamo podatke iz localStorage
 
     if (!geneData) {
@@ -545,7 +639,7 @@ function handleGeneClick(geneSymbol) {
 
     // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
     const targetElement = get3DObjectByPosition(x, y, z);
-    console.log(targetElement);
+    // console.log(targetElement);
     handleGeneSelection(targetElement);
 }
 
@@ -658,7 +752,7 @@ function onGeneSelection(geneName) {
       zoomToElement(selectedObject, true);
 
       // Korišćenje podataka o genu (ako je potrebno)
-      console.log("Gene data:", geneData);
+      // console.log("Gene data:", geneData);
       // Na primer, možete koristiti geneData za dalju obradu, kao što je pozivanje funkcije za dodatne podatke
       fetchProteinConcentrationData(geneData.geneName)
         .then(proteinData => {
@@ -682,7 +776,7 @@ function onGeneSelection(geneName) {
 }
 
 function fillInData(proteinData) {
-    console.log("fillInData")
+    // console.log("fillInData")
     if (proteinData && proteinData.additionalInfo) {
         const additionalInfo = proteinData.additionalInfo;
         let geneData = getGeneData(additionalInfo.EntrezGeneSymbol)
@@ -753,7 +847,7 @@ function toggleMoreLess() {
 
 // Funkcija za kreiranje 2D plot-a
 function createProteinPLot(data) {
-    console.log("createProteinPLot")
+    // console.log("createProteinPLot")
     // Osiguraj da podaci postoje
     if (!data.young || !data.old) {
         console.error("Error: Missing data for plotting.");
@@ -835,11 +929,11 @@ let allPapers = [];
 let visiblePapers = 3; // Početno prikazivanje 3 rada
 function handleLoadMoreClick() {
     // console.log("clicked")
-    console.log(loadMoreBtn.innerText)
+    // console.log(loadMoreBtn.innerText)
     if (loadMoreBtn.innerText === "SHOW MORE") {
-        console.log("show more")
+        // console.log("show more")
         visiblePapers = allPapers.length; // Učitaj sve radove
-        console.log(visiblePapers);
+        // console.log(visiblePapers);
     } else {
         visiblePapers = 3; // Resetuj na 3 rada
     }
@@ -879,7 +973,7 @@ function displayPapers() {
 
 function loadGenePapers(geneName) {
     // Provera da li elementi postoje
-    console.log("loadGenePapers")
+    // console.log("loadGenePapers")
 
     if (!scientificContainer) {
         console.error("Error: Element #scientific-paper not found.");
@@ -917,7 +1011,7 @@ function loadGenePapers(geneName) {
                 visiblePapers = 3; // Resetuj početni broj prikazanih radova
                 if(selectedObject)displayPapers();
             } else {
-                sidebarContent.innerHTML = "<p>No related papers found.</p>";
+                infoContainer.innerHTML = "<p>No related papers found.</p>";
             }
         })
         .catch(error => console.error("Error fetching data:", error));
@@ -947,23 +1041,23 @@ function loadAndCreatePlot() {
 
 
 function lightenColor(material, factor = 0.2) {
-    console.log("lightenColor pozvan sa faktorom:", factor);
+    // console.log("lightenColor pozvan sa faktorom:", factor);
     const color = new THREE.Color(material.color);
-    console.log("Originalna boja:", material.color);
+    // console.log("Originalna boja:", material.color);
 
     color.offsetHSL(0, 0, factor); // Povećava svetlinu
     material.color.set(color);
 
-    console.log("Nova boja:", color);
+    // console.log("Nova boja:", color);
 }
 
 
 function restoreOriginalColor() {
-    console.log("restoreOriginalColor pozvan.");
+    // console.log("restoreOriginalColor pozvan.");
     if (hiddenObject) {
-        console.log("Obnovljena boja objekta.");
+        // console.log("Obnovljena boja objekta.");
         hiddenObject.material.color.set(originalColor); // Vrati staru boju
-        console.log("Stara boja postavljena:", originalColor);
+        // console.log("Stara boja postavljena:", originalColor);
         selectedObject = null;
     } else {
         console.log("Nema skrivenog objekta za vraćanje boje.");
@@ -972,7 +1066,7 @@ function restoreOriginalColor() {
 
 
 function dimOtherElements(scene, selectedObject, dimOpacity = 0.3, originalOpacity = 1) {
-    console.log("dimOtherElements")
+    // console.log("dimOtherElements")
     scene.traverse((object) => {
         if (object.isMesh && object.material) {
             if (object === selectedObject) {
@@ -1015,7 +1109,7 @@ function restoreAllColors(){
 
 // Kreiranje 2D plot-a
 function create2DPlot(data) {
-    console.log("create2DPlot data:", data);
+    // console.log("create2DPlot data:", data);
     clearScene();
     resetTooltip();
 
@@ -1041,7 +1135,7 @@ function create2DPlot(data) {
 
     const minValue = Math.min(...data.y);
     const maxValue = Math.max(...data.y);
-    console.log(maxValue);
+    // console.log(maxValue);
     const geometry = new THREE.SphereGeometry(0.2, 32, 16); // Koristi istu veličinu loptica kao u prvom primeru
     points = [];
     const outlines = [];
@@ -1219,7 +1313,7 @@ function onMouseMove(event) {
 // Funkcija koja vraća sve u prethodno stanje
 function emptySidebar() {
     searchInput.value = "";
-    console.log("emptySidebar")
+    // console.log("emptySidebar")
     // Vratiti originalnu boju prethodno selektovanog objekta
     if (selectedObject) {
         restoreOriginalColor(); // Vrati boju selektovanog objekta
@@ -1389,27 +1483,27 @@ function zoomToElement(targetElement, enableTransition) {
         return;
     }
 
-    console.log("🔍 zoomToElement pozvan za:", targetElement);
+    // console.log("🔍 zoomToElement pozvan za:", targetElement);
 
     zoomed = true;
 
     // Provera da li objekat ima bounding box
     const boundingBox = new THREE.Box3().setFromObject(targetElement);
-    console.log("📦 Bounding Box:", boundingBox);
+    // console.log("📦 Bounding Box:", boundingBox);
 
     if (boundingBox.isEmpty()) {
         console.warn("⚠️ zoomToElement: Bounding box je prazan!");
         return;
     }
 
-    console.log("📸 Pozivamo cameraControls.fitToBox sa opcijama:");
-    console.log({
-        cover: false,
-        paddingTop: 20,
-        paddingLeft: 20,
-        paddingBottom: 20,
-        paddingRight: 20
-    });
+    // console.log("📸 Pozivamo cameraControls.fitToBox sa opcijama:");
+    // console.log({
+    //     cover: false,
+    //     paddingTop: 20,
+    //     paddingLeft: 20,
+    //     paddingBottom: 20,
+    //     paddingRight: 20
+    // });
 
     cameraControls.fitToBox(boundingBox, enableTransition, {
         cover: false, // Sprečava da element zauzme ceo ekran
@@ -1418,7 +1512,7 @@ function zoomToElement(targetElement, enableTransition) {
         paddingBottom: 20,
         paddingRight: 20
     }).then(() => {
-        console.log("✅ Zoom uspešno završen!");
+        // console.log("✅ Zoom uspešno završen!");
     }).catch((error) => {
         console.error("❌ Greška u zoomToElement:", error);
     });
