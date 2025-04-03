@@ -56,6 +56,8 @@ const _scale = new THREE.Vector3();
 let loading = false;
 const searchInput = document.getElementById("searchInput");
 const resultsContainer = document.getElementById("resultsContainer");
+const genes3D = JSON.parse(localStorage.getItem('genes3D')) || [];
+const genes2D = JSON.parse(localStorage.getItem('genes2D')) || [];
 
 window.onload = () => {
     canvasLoader.style.display = 'block';
@@ -239,14 +241,15 @@ function toggleSphereAndShowTorus(clickedObject) {
         }
 
         // Dohvati podatke iz localStorage
-        let item = localStorage.getItem(clickedObject.geneName);
+        let item = genes3D.find(gene => gene.geneName === clickedObject.geneName)
         if (!item) {
             console.warn(`getRadius: No data found in localStorage for key '${clickedObject.geneName}'`);
             return 3;
         }
 
         try {
-            item = JSON.parse(item); // Parsiranje JSON stringa u objekat
+            console.log(item)
+            // item = JSON.parse(item); // Parsiranje JSON stringa u objekat
         } catch (error) {
             console.error(`getRadius: Failed to parse JSON from localStorage for '${clickedObject.geneName}'`, error);
             return 3;
@@ -570,6 +573,7 @@ function handleGeneSelection2D(clickedObject){
         // console.log("🎨 Sačuvana originalna boja objekta:", originalColor);
     }
 
+
     // Osvetljavanje selektovanog objekta
     lightenColor(selectedObject.material);
     // console.log("💡 Objekat osvetljen.");
@@ -577,6 +581,9 @@ function handleGeneSelection2D(clickedObject){
 
     // Smanjivanje drugih objekata na sceni
     dimOtherElements(scene, clickedObject);
+
+
+
     // console.log("📉 Ostali objekti prigušeni.");
     zoomToElement(clickedObject, true);
 
@@ -691,25 +698,44 @@ function handleGeneSelection(clickedObject) {
 
 
 function handleGeneClick(geneSymbol) {
-    isRotating = false;
-    // console.log(geneSymbol);
-    const geneData = localStorage.getItem(geneSymbol); // Preuzimamo podatke iz localStorage
 
-    if (!geneData) {
-        console.error(`Gen ${geneSymbol} nije pronađen u localStorage.`);
-        return;
+    isRotating = false
+    let geneData;
+    if(is3D){
+        geneData = genes3D.find(gene => gene.geneName === geneSymbol);
+    }else{
+        geneData = genes2D.find(gene => gene.geneName === geneSymbol);
     }
 
-    const geneInfo = JSON.parse(geneData); // Parsiramo JSON string iz localStorage
-    const { x, y, z } = geneInfo.position; // Ekstraktujemo poziciju gena
+    console.log(geneData)
+    let x;
+    let y;
+    let z;
+    if (geneData && geneData.position) {
+        console.log("jaje")
+        console.log(geneData.position.x)
+        x = geneData.position.x;
+        y = geneData.position.y;
+        z = geneData.position.z || 0;
+
+        // Your camera movement/animation code here
+        // Example:
+        // camera.position.set(x, y, z);
+    } else {
+        console.warn(`Gene ${geneSymbol} not found in 3D data`);
+        // Handle missing gene case
+    }
 
     // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
-    const targetElement = get3DObjectByPosition(x, y, z);
+    let targetElement;
     // console.log(targetElement);
     if(is3D){
+        targetElement = get3DObjectByPosition(x, y, z);
         handleGeneSelection(targetElement);
     }else{
-        handleGeneSelection2D(clickedObject);
+        targetElement = get2DObjectByPosition(x, y, genes2D);
+        console.log(targetElement)
+        handleGeneSelection2D(targetElement);
     }
 }
 
@@ -797,6 +823,30 @@ function get3DObjectByPosition(x, y, z) {
     return closestObject;
 }
 
+// Function to find the closest 2D object based on screen coordinates
+function get2DObjectByPosition(x, y, elements) {
+    let z = 0
+    let closestObject = null;
+    let minDistance = Infinity;
+
+    scene.traverse((object) => {
+        if (object.isMesh) {
+            const objPos = object.position;
+            const distance = Math.sqrt(
+                Math.pow(objPos.x - x, 2) +
+                Math.pow(objPos.y - y, 2) +
+                Math.pow(objPos.z - z, 2)
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestObject = object;
+            }
+        }
+    });
+
+    return closestObject;
+}
 
 
 
@@ -1162,18 +1212,6 @@ function create2DPlot(data) {
         resetCamera();
     }
 
-    //  // Dodaj koordinatne ose na početku (po potrebi)
-    // if (!axesHelper) {
-    //     axesHelper = new THREE.AxesHelper(50);  // 50 je dužina osa
-    //
-    //     // Rotiraj ose za 90 stepeni oko Y ose
-    //     axesHelper.rotation.set(0, Math.PI / 2, 0); // Rotacija za 90 stepeni oko Y ose
-    //
-    //     // Postavi ose na određenu poziciju ako je potrebno
-    //     axesHelper.position.set(0, -60, 0);  // Pozicija koordinatnih osa (x=0, y=0, z=0)
-    //
-    //     scene.add(axesHelper);
-    // }
 
 
     const minValue = Math.min(...data.y);
@@ -1182,7 +1220,7 @@ function create2DPlot(data) {
     const geometry = new THREE.SphereGeometry(0.2, 32, 16); // Koristi istu veličinu loptica kao u prvom primeru
     points = [];
     const outlines = [];
-
+    const genes2D = []; // Array to hold all gene data
     // Kreiramo tačke (spheres) na osnovu podataka
     for (let i = 0; i < data.x.length; i++) {
         let color = new THREE.Color(getColor(i, data.x.length)); // Određivanje boje
@@ -1200,14 +1238,15 @@ function create2DPlot(data) {
         // Dodaj malu random varijaciju za razdvajanje tačaka
         sphere.position.set(data.x[i] * 50 + Math.random() * 0.5, data.y[i] * 20 - 60 + Math.random() * 0.5, 0);
 
-        // // Kreiraj outline
-        // const outlineSphere = new THREE.Mesh(geometry, outlineMaterial);
-        // outlineSphere.scale.set(1.2, 1.2, 1.2); // Povećaj outline za 20%
-        //
-        // // Dodaj outline na istu poziciju
-        // outlineSphere.position.copy(sphere.position);
-        // scene.add(outlineSphere);
-        // outlines.push(outlineSphere);
+        // Add gene data to the array
+        genes2D.push({
+          geneName: data.geneNames[i],
+          position: {
+            x: sphere.position.x,
+            y: sphere.position.y,
+            z: sphere.position.z,
+          },
+        });
 
         // Dodaj originalnu loptu
         scene.add(sphere);
@@ -1216,6 +1255,8 @@ function create2DPlot(data) {
         // Dodaj geneName (ili drugi relevantni podaci) kao svojstvo na svakom objektu
         sphere.geneName = data.geneNames[i];
     }
+    // Store the entire array in localStorage once
+    localStorage.setItem('genes2D', JSON.stringify(genes2D));
 
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
@@ -1265,41 +1306,33 @@ function resetTooltip() {
 
 
 function create3DPlot(data) {
-  // console.log("create3DPlot data:", data);
-
   clearScene();
   resetTooltip();
-  if (isLoader){
-      toStartPosition();
-  }else{
-      resetCamera();
-      resetCamera()
+  if (isLoader) {
+    toStartPosition();
+  } else {
+    resetCamera();
   }
-
 
   const minValue = Math.min(...data.y);
   const maxValue = Math.max(...data.y);
-  // console.log(maxValue);
-
   points = [];
+  const genes3D = []; // Array to hold all gene data
 
-  // Loop through the data and create spheres for the plot
   for (let i = 0; i < data.x.length; i++) {
     let color = new THREE.Color(getColor(i, data.x.length));
     let scaleFactor = getScaledSize(data.y[i], minValue, maxValue);
-    // Create geometry for the sphere directly without calling createBubble
     let geometry = new THREE.SphereGeometry(scaleFactor, 64, 32);
 
     const material = new THREE.MeshStandardMaterial({
       color,
-      emissive: color,  // Dodaj svetleći efekat u istoj boji
-      emissiveIntensity: 2, // Povećaj ako želiš jači sjaj
+      emissive: color,
+      emissiveIntensity: 2,
       transparent: true,
       opacity: 1,
     });
 
     const sphere = new THREE.Mesh(geometry, material);
-
     sphere.position.set(
       data.x[i] * 50 + Math.random() * 2,
       data.y[i] * 12 - 40,
@@ -1309,9 +1342,8 @@ function create3DPlot(data) {
     scene.add(sphere);
     points.push(sphere);
 
-
-    // Store the gene name and coordinates in localStorage
-    const geneData = {
+    // Add gene data to the array
+    genes3D.push({
       geneName: data.geneNames[i],
       position: {
         x: sphere.position.x,
@@ -1319,21 +1351,18 @@ function create3DPlot(data) {
         z: sphere.position.z,
       },
       scale: scaleFactor,
-    };
+    });
 
-    // Add the gene data to localStorage (using gene name as the key)
-    localStorage.setItem(data.geneNames[i], JSON.stringify(geneData));
-    // Store the gene name on the sphere object
     sphere.geneName = data.geneNames[i];
-
   }
+
+  // Store the entire array in localStorage once
+  localStorage.setItem('genes3D', JSON.stringify(genes3D));
 
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
-
   tooltip.appendChild(renderer.domElement);
 }
-
 
 
 
@@ -1833,7 +1862,6 @@ function toggleMusic() {
 }
 
 function resetMusic() {
-
     music.pause(); // Pauziraj muziku
     music.currentTime = 0; // Vrati na početak
     music.play();
