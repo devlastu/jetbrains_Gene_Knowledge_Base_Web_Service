@@ -68,8 +68,9 @@ cd Gene-Knowledge-Base-Web-Service
 - Create a virtual environment and install the required Python packages:
 ```bash
 cd project
-python3 -m venv venv
-.venv/bin/activate  # On Windows use `venv\Scripts\activate`
+```
+-setup venv and then:
+```bash
 pip install -r requirements.txt
 ```
 
