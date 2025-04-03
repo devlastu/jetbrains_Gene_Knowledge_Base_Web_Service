@@ -473,7 +473,7 @@ button:active {
 }
 
 
-#testButton{
+#stopButton{
     position: fixed;
     top: 20px;
     right: 80%;

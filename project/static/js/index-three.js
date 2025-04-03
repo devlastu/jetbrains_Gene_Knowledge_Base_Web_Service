@@ -546,6 +546,72 @@ function fetchProteinConcentrationData(geneName) {
         });
 }
 
+function handleGeneSelection2D(clickedObject){
+    loading = true;
+    if (!clickedObject) {
+        console.error("❌ Kliknuti objekat nije definisan! Provera failed.");
+        return;
+    }
+
+    isRotating = false;
+    lavaLoader.style.display = 'block';
+    basicInfo.setAttribute('style', 'display:none');
+
+     // Vraćanje boje originalnog objekta
+    restoreOriginalColor();
+    // Odabir trenutnog objekta
+    selectedObject = clickedObject;
+    if (!selectedObject.material || !selectedObject.material.color) {
+        console.error("❌ Kliknuti objekat nema validan material ili color.");
+        return;
+    }
+    if(selectedObject.material.color) {
+        originalColor.copy(selectedObject.material.color);
+        // console.log("🎨 Sačuvana originalna boja objekta:", originalColor);
+    }
+
+    // Osvetljavanje selektovanog objekta
+    lightenColor(selectedObject.material);
+    // console.log("💡 Objekat osvetljen.");
+
+
+    // Smanjivanje drugih objekata na sceni
+    dimOtherElements(scene, clickedObject);
+    // console.log("📉 Ostali objekti prigušeni.");
+    zoomToElement(clickedObject, true);
+
+    // Učitavanje podataka o proteinu
+    let geneName = clickedObject.geneName;
+    if (!geneName) {
+        console.error("❌ Kliknuti objekat nema `geneName`!");
+        return;
+    }
+    fetchProteinConcentrationData(geneName)
+        .then(proteinData => {
+            // console.log("✅ Podaci o proteinu dobijeni:", proteinData);
+
+            if (proteinData.young && proteinData.old) {
+                // console.log("📊 Podaci za mlade i stare postoje. Pravimo grafikon...");
+
+                // Učitavanje naučnih radova i kreiranje grafikona
+                loadGenePapers(geneName);
+                createProteinPlot(proteinData);
+                proteinPlot.setAttribute('style', 'display: block;');
+
+                // Popunjavanje podataka u odgovarajući interfejs
+                fillInData(proteinData);
+
+                // Prikazivanje dugmeta za zatvaranje
+                closeButton.classList.add("visible");
+                // console.log("✅ Podaci uspešno prikazani!");
+
+            } else {
+                console.error("❌ Error: Nedostaju podaci za prikazivanje grafikona!");
+            }
+        })
+        .catch(error => console.error("❌ Error prilikom dohvatanja podataka o proteinu:", error));
+
+}
 
 function handleGeneSelection(clickedObject) {
     // console.log("📢 handleGeneSelection POZVAN!");
@@ -606,7 +672,7 @@ function handleGeneSelection(clickedObject) {
 
                 // Učitavanje naučnih radova i kreiranje grafikona
                 loadGenePapers(geneName);
-                createProteinPLot(proteinData);
+                createProteinPlot(proteinData);
                 proteinPlot.setAttribute('style', 'display: block;');
 
                 // Popunjavanje podataka u odgovarajući interfejs
@@ -640,7 +706,11 @@ function handleGeneClick(geneSymbol) {
     // Pronađi 3D objekat u sceni (pretpostavljamo da postoji neka funkcija get3DObjectByPosition)
     const targetElement = get3DObjectByPosition(x, y, z);
     // console.log(targetElement);
-    handleGeneSelection(targetElement);
+    if(is3D){
+        handleGeneSelection(targetElement);
+    }else{
+        handleGeneSelection2D(clickedObject);
+    }
 }
 
 function displayImportantGenes(genes, start, end) {
@@ -728,52 +798,7 @@ function get3DObjectByPosition(x, y, z) {
 }
 
 
-function onGeneSelection(geneName) {
-  // Pronalaženje podataka o genu u localStorage
-  const geneData = JSON.parse(localStorage.getItem(geneName));
 
-  if (geneData) {
-    // Pronađi odgovarajući objekat u listi 'points' koristeći geneName
-    let selectedObject = null;
-    for (let i = 0; i < points.length; i++) {
-      if (points[i].geneName === geneName) {
-        selectedObject = points[i];
-        break;
-      }
-    }
-
-    if (selectedObject) {
-      // Ako je objekat pronađen, nastavite sa obradom
-      restoreOriginalColor();
-      originalColor.copy(selectedObject.material.color);
-
-      lightenColor(selectedObject.material);
-      dimOtherElements(scene, selectedObject);
-      zoomToElement(selectedObject, true);
-
-      // Korišćenje podataka o genu (ako je potrebno)
-      // console.log("Gene data:", geneData);
-      // Na primer, možete koristiti geneData za dalju obradu, kao što je pozivanje funkcije za dodatne podatke
-      fetchProteinConcentrationData(geneData.geneName)
-        .then(proteinData => {
-          if (proteinData.young && proteinData.old) {
-            loadGenePapers(geneData.geneName);
-            createProteinPlot(proteinData);
-            proteinPlot.setAttribute('style', 'display: block;');
-            fillInData(proteinData);
-            closeButton.classList.add("visible");
-          } else {
-            console.error("Error: Missing data for plotting.");
-          }
-        })
-        .catch(error => console.error("Error fetching protein concentration data:", error));
-    } else {
-      console.error("Gene object not found in the list.");
-    }
-  } else {
-    console.error("Gene data not found in localStorage.");
-  }
-}
 
 function fillInData(proteinData) {
     // console.log("fillInData")
@@ -844,82 +869,100 @@ function toggleMoreLess() {
 }
 
 
+function calculateBoxStats(values) {
+    if (!values || values.length === 0) return { q1: null, median: null, q3: null };
 
-// Funkcija za kreiranje 2D plot-a
-function createProteinPLot(data) {
-    // console.log("createProteinPLot")
-    // Osiguraj da podaci postoje
+    // Sortiraj podatke
+    const sorted = [...values].sort((a, b) => a - b);
+
+    // Pomoćne funkcije za kvartile
+    const quantile = (arr, q) => {
+        const pos = (arr.length - 1) * q;
+        const base = Math.floor(pos);
+        const rest = pos - base;
+        if (arr[base + 1] !== undefined) {
+            return arr[base] + rest * (arr[base + 1] - arr[base]);
+        } else {
+            return arr[base];
+        }
+    };
+
+    return {
+        q1: quantile(sorted, 0.25),
+        median: quantile(sorted, 0.5),
+        q3: quantile(sorted, 0.75)
+    };
+}
+
+/**
+ * Function to create a box plot for protein activity levels, with data for two groups: young and old.
+ * This function uses the Plotly library to visualize the data.
+ *
+ * @param {Object} data - Data for plotting. The expected object structure:
+ *   - `young` (Array): Array of values for the young group.
+ *   - `old` (Array): Array of values for the old group.
+ *   - `x` (Array, optional): Array of x-values (if not provided, indices will be used).
+ *
+ * The function renders a box plot inside the HTML element with the id 'protein-plot'.
+ * The plot displays data for both groups with different colors and hover information.
+ *
+ * @returns {void} - This function does not return any values.
+ */
+function createProteinPlot(data) {
     if (!data.young || !data.old) {
         console.error("Error: Missing data for plotting.");
         return;
     }
+    // Funkcija za zaokruživanje na 2 decimale
+    const roundToTwo = (num) => Math.round(num * 100) / 100;
 
+    // Izračunaj Q1, Median i Q3 za obe grupe
+    const youngStats = calculateBoxStats(data.young);
+    const oldStats = calculateBoxStats(data.old);
 
-    // Dodaj x vrednosti ako nisu pružene
-    const xValues = data.x || [...Array(data.young.length).keys()];  // Koristi indekse ako x vrednosti nisu date
-
-    // Razdvajanje na boje za mlade (young) i stare (old)
     const traceYoung = {
-        x: xValues,
-        y: data.young,
-        mode: 'markers',
-        marker: {
-            size: 10,
-            color: '#d3904b', // Boja za mlade (light blue)
-            opacity: 1,
-            line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
-        },
+        y: data.young.map(roundToTwo),
+        boxpoints: 'all',
+        jitter: 0.5,
+        pointpos: 0,
+        marker: { color: '#d3904b' },
         name: 'Young',
-        hovertemplate: 'Young<br>X: %{x}<br>Y: %{y}<extra></extra>',
-        type: 'scatter'
+        hovertemplate:
+            `Young<br>Y: %{y:.2f}<br>` +
+            `Median: ${roundToTwo(youngStats.median)}<br>Q1: ${roundToTwo(youngStats.q1)}<br>Q3: ${roundToTwo(youngStats.q3)}<extra></extra>`,
+        type: 'box'
     };
 
     const traceOld = {
-        x: xValues,
-        y: data.old,
-        mode: 'markers',
-        marker: {
-            size: 10,
-            color: '#8C3061', // Boja za stare (red)
-            opacity: 1,
-            line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 }
-        },
+        y: data.old.map(roundToTwo),
+        boxpoints: 'all',
+        jitter: 0.5,
+        pointpos: 0,
+        marker: { color: '#8C3061' },
         name: 'Old',
-        hovertemplate: 'Old<br>X: %{x}<br>Y: %{y}<extra></extra>',
-        type: 'scatter'
+        hovertemplate:
+            `Old<br>Y: %{y:.2f}<br>` +
+            `Median: ${roundToTwo(oldStats.median)}<br>Q1: ${roundToTwo(oldStats.q1)}<br>Q3: ${roundToTwo(oldStats.q3)}<extra></extra>`,
+        type: 'box'
     };
 
-    // Dobijanje širine sidebar-a i postavljanje visine na željenu vrednost (30%)
-    const sidebarWidth = document.getElementById('sidebar').offsetWidth; // Širina sidebar-a
-    const plotHeight = window.innerHeight * 0.3; // Visina 30% od visine prozora
-
-
-    // Layout za plot
     const layout = {
-        width: 0.9 * sidebarWidth,  // Koristi širinu sidebar-a
-        height: plotHeight,   // Koristi visinu 30% od prozora
-        margin: { l: 0, r: 0, b: 0, t: 0 },  // Ukoni margine za da bi bilo što je moguće bliže ivici
-        paper_bgcolor: "#000000",  // Pozadina papira
-        plot_bgcolor: "#000000",   // Pozadina grafa
-        font: { color: "#ffffff" }, // Tekst u beloj boji
-        showlegend: false, // Sakrij legendu
+        width: document.getElementById('sidebar').offsetWidth * 0.9,
+        height: window.innerHeight * 0.3,
+        margin: { l: 0, r: 0, b: 0, t: 0 },
+        paper_bgcolor: "#000000",
+        plot_bgcolor: "#000000",
+        font: { color: "#ffffff" },
+        showlegend: false,
         hovermode: 'closest',
         xaxis: {
-            showgrid: true,  // Prikazivanje mreže na x-osi
-            zeroline: false, // Sakrij nulu na x-osi
-            showticklabels: true, // Prikazivanje oznaka na x-osi
-            color: '#ffffff', // Boja osa
+            showgrid: true, zeroline: false, showticklabels: true,
+            color: '#ffffff', tickvals: [0, 1], ticktext: ['Young', 'Old']
         },
-        yaxis: {
-            showgrid: true,  // Prikazivanje mreže na y-osi
-            zeroline: false, // Sakrij nulu na y-osi
-            showticklabels: true, // Prikazivanje oznaka na y-osi
-            color: '#ffffff', // Boja osa
-        }
+        yaxis: { showgrid: true, zeroline: false, showticklabels: true, color: '#ffffff' },
+        title: { text: "Protein Activity Levels in Young and Old Groups", font: { color: '#ffffff', size: 14 }, x: 0.5, y: 0.98 }
     };
 
-
-    // Kreiraj plot u #protein-plot div-u
     Plotly.newPlot('protein-plot', [traceYoung, traceOld], layout);
 }
 
@@ -1142,7 +1185,7 @@ function create2DPlot(data) {
 
     // Kreiramo tačke (spheres) na osnovu podataka
     for (let i = 0; i < data.x.length; i++) {
-        let color = new THREE.Color(getColor(data.y[i], minValue, maxValue)); // Određivanje boje
+        let color = new THREE.Color(getColor(i, data.x.length)); // Određivanje boje
         const material = new THREE.MeshStandardMaterial({
           color,
           emissive: color,  // Dodaj svetleći efekat u istoj boji
@@ -1242,7 +1285,7 @@ function create3DPlot(data) {
 
   // Loop through the data and create spheres for the plot
   for (let i = 0; i < data.x.length; i++) {
-    let color = new THREE.Color(getColor(data.y[i], minValue, maxValue));
+    let color = new THREE.Color(getColor(i, data.x.length));
     let scaleFactor = getScaledSize(data.y[i], minValue, maxValue);
     // Create geometry for the sphere directly without calling createBubble
     let geometry = new THREE.SphereGeometry(scaleFactor, 64, 32);
@@ -1312,6 +1355,7 @@ function onMouseMove(event) {
 
 // Funkcija koja vraća sve u prethodno stanje
 function emptySidebar() {
+    console.log("mama")
     searchInput.value = "";
     // console.log("emptySidebar")
     // Vratiti originalnu boju prethodno selektovanog objekta
@@ -1369,11 +1413,12 @@ function onClick(event) {
     mousePointer = getMouseVector2(event, window);
     intersections = checkRayIntersections(mousePointer, camera, raycaster, scene, true);
 
-    if (intersections.object && !loading) {
+    if (intersections.object && !loading && is3D) {
 
 
         clickedObject = intersections.object;
-        if(clickedObject.geneName === lastClicked.geneName) return;
+        if(clickedObject.geneName === lastClicked.geneName || clickedObject === torusObject) return;
+        emptySidebar();
         if (lastClicked){
             restoreSphereAndRemoveTorus(lastClicked, torusObject, stemMesh, blossomMesh);
         }
@@ -1385,6 +1430,17 @@ function onClick(event) {
         loading = true;
         handleGeneSelection(clickedObject);
 
+    }else if(intersections.object && !loading && !is3D){
+        console.log("sisi")
+        emptySidebar();
+        clickedObject = intersections.object;
+        if(clickedObject.geneName === lastClicked.geneName) return;
+        clickedColor = clickedObject.material.color;
+
+
+        // console.log(clickedObject);
+        loading = true;
+        handleGeneSelection2D(clickedObject);
     } else {
         if (clickInterval < 300) {
             closeFunction();
@@ -1612,27 +1668,24 @@ function hideTooltip() {
 
 
 
-function getColor(value, minValue, maxValue) {
-    const colorsLow = ['rgba(82, 34, 88)', 'rgba(140, 48, 97)', 'rgba(198, 60, 81)', 'rgba(211, 144, 75)', 'rgba(217, 119, 89)'];
-    const colorsHigh = ['rgba(217, 147, 89)', 'rgba(241,189,46)', 'rgba(241,213,135)'];
+function getColor(index, totalElements) {
+    const colors = [
+        'rgb(48,49,174)', 'rgb(119,52,216)', 'rgba(82, 34, 88)', 'rgb(109,39,119)', 'rgba(140, 48, 97)', 'rgb(184,62,126)', 'rgb(184,62,126)', 'rgb(225,60,84)',
+        'rgb(234,38,108)', 'rgb(214,35,35)', 'rgb(177,55,107)', 'rgb(225,149,76)',
+    ];
 
-    const yMid = (minValue + maxValue) / 2;
-    const rangeLow = yMid - minValue;
-    const rangeHigh = maxValue - yMid;
+    // Reverse the order of the colors array
+    const reversedColors = colors.reverse();
 
-    let normalizedValue;
-    let colorIndex;
+    const groupSize = Math.floor(totalElements / reversedColors.length); // Calculate the size of each group
+    const colorIndex = Math.floor(index / groupSize); // Determine which color to use based on the index
 
-    if (value <= yMid) {
-        normalizedValue = (value - minValue) / rangeLow;
-        colorIndex = Math.floor(normalizedValue * 5);
-        return colorsLow[colorIndex];
-    } else {
-        normalizedValue = (value - yMid) / rangeHigh;
-        colorIndex = Math.floor(normalizedValue * (colorsHigh.length - 1));
-        return colorsHigh[colorIndex];
-    }
+    // Ensure the colorIndex does not exceed the available colors length
+    return reversedColors[Math.min(colorIndex, reversedColors.length - 1)];
 }
+
+
+
 
 function getScaledSize(value, minValue, maxValue) {
     const midThreshold = minValue + (maxValue - minValue) * 0.5; // 80% tačke vrednosti
@@ -1667,7 +1720,7 @@ function closeFunction() {
     basicInfo.style.display = "block";
     nonLoaderInfo.style.opacity = "0";
     nonLoaderInfo.style.transform = "scale(0.95)";
-    emptySidebar()
+    emptySidebar();
     resetTooltip();
     resetCamera();
     restoreAllColors();
@@ -1696,7 +1749,7 @@ window.addEventListener("DOMContentLoaded", () => {
     closeButton.addEventListener("click", closeFunction);
     const toggleButton = document.getElementById("toggleButton");
     toggleButton.textContent = "2D"; // Dugme počinje s natpisom '2D'
-    const testPageButton = document.getElementById("testButton");
+    const stopRotationBtn = document.getElementById("stopButton");
 
     toggleButton.addEventListener("click", function () {
         if (is3D) {
@@ -1712,8 +1765,18 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     // Dodajemo event listener za dugme
-    testPageButton.addEventListener('click', function() {
-        window.location.href =  '/test-page'; // Pozivamo Flask rutu koja vodi do test.html
+    stopRotationBtn.addEventListener('click', function() {
+        if (isRotating) {
+
+            stopRotationBtn.textContent = "Start Rotation"; // Kada je u 2D modu, dugme treba da kaže '3D'
+
+        } else {
+
+            stopRotationBtn.textContent = "Stop Rotation"; // Kada je u 3D modu, dugme treba da kaže '2D'
+        }
+
+        isRotating = !isRotating; // Obrće stanje prikaza
+
     });
 
     // Sakrij listu kada se klikne van nje
@@ -1730,6 +1793,7 @@ window.addEventListener("DOMContentLoaded", () => {
         resetBtn.style.display = "block";
         toggleButton.style.display = "block";
         musicElement.style.display = "block";
+        stopRotationBtn.style.display= "block";
 
          // Add listener to call onMouseMove every time the mouse moves in the browser window
         document.addEventListener('mousemove', onMouseMove, false);

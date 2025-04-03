@@ -17,8 +17,21 @@ MYGENE_API_BASE = "https://mygene.info/v3"
 
 @app.route("/get_gene_papers", methods=["GET"])
 def get_gene_papers():
+    """
+    Fetch scientific papers related to a given gene using the MyGene API.
+
+    Args:
+        gene_name (str): The gene symbol (e.g., 'BRCA1') to search for.
+
+    Returns:
+        JSON: A JSON response containing the gene name and a list of PubMed paper links.
+    """
+
+    # Retrieve the gene name from the query parameter
     gene_name = request.args.get("gene_name")
-    print(gene_name)
+
+
+
 
     if not gene_name:
         return jsonify({"error": "Gene name is required"}), 400
@@ -36,7 +49,7 @@ def get_gene_papers():
 
     gene_id = data["hits"][0]["_id"]
 
-    # 2.Fetch the data using gene ID
+    # Fetch the data using gene ID
     try:
         response = requests.get(f"{MYGENE_API_BASE}/gene/{gene_id}")
         response.raise_for_status()
@@ -44,15 +57,15 @@ def get_gene_papers():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch gene info: {str(e)}"}), 500
 
-    # 3. Extract PubMedId-s
+    # Extract PubMedId-s
     pubmed_ids = set()
-    # Iz `generif`
+    # from `generif`
     if "generif" in gene_data:
         for entry in gene_data["generif"]:
             if "pubmed" in entry:
                 pubmed_ids.add(entry["pubmed"])
 
-    # 4.Create PubMed links
+    # Create PubMed links
     pubmed_links = [f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_id}/" for pubmed_id in pubmed_ids]
 
 
@@ -64,23 +77,32 @@ def get_gene_papers():
 # Route for generating the 3D volcano plot data
 @app.route('/plot_data')
 def plot_data():
+    """
+    Generate data for a 3D/2D volcano plot from an Excel file.
+
+    The function reads data from an Excel file, processes it to calculate the
+    necessary values for the plot (e.g., -log10 of p-values), filters for
+    important genes, and returns the data in a JSON format for plotting.
+
+    Returns:
+        JSON: The data for generating a 3D volcano plot.
+    """
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
         # Loading the data
         s4b_data = read_excel_data(file_path, "S4B limma results")
 
-        print(f"Prije normalizacije x: {s4b_data['logFC'].head()}")
 
         # Calculating -log10 for adj.P.Val
         s4b_data['-log10(adj.P.Val)'] = -np.log10(s4b_data['adj.P.Val'])
+        # Generate a random Z value for each data point
+        # to create more appealing UI
         s4b_data['Z_value'] = np.random.uniform(-3, 3, len(s4b_data))
 
         # Filter the data based on logFC and adj.P.Val
         important_genes = s4b_data[(abs(s4b_data['logFC']) > 0.5) & (s4b_data['adj.P.Val'] < 0.05)]
 
-        # Display the filtered important genes
-        print(f"Important: {important_genes[['EntrezGeneSymbol', 'logFC', 'adj.P.Val']]}")
 
         # Extraxt the data for 3D
         plot_data = {
@@ -101,8 +123,7 @@ def plot_data():
                 axis=1
             ).tolist()  # Send important gene names with additional data
         }
-        print(max(s4b_data['-log10(adj.P.Val)'].tolist()))
-        print(min(s4b_data['-log10(adj.P.Val)'].tolist()))
+
         return jsonify(plot_data)  # Send the data in JSON format
 
     except Exception as e:
@@ -114,7 +135,20 @@ def plot_data():
 #View for generating 2D Protein Data plot
 @app.route('/protein_concentration_data')
 def protein_concentration_data():
-    gene_name = request.args.get('geneName')  # Uzimanje imena gena iz query parametra
+    """
+   Fetch protein concentration data for a given gene.
+
+   The function extracts protein concentration data for a specific gene from
+   an Excel file and returns the data for both young and old donors, as well as
+   additional gene-related information.
+
+   Args:
+       gene_name (str): The gene symbol (e.g., 'BRCA1') for which to fetch concentration data.
+
+   Returns:
+       JSON: The protein concentration data and additional gene information.
+   """
+    gene_name = request.args.get('geneName')
     file_path = 'data/NIHMS1635539-supplement-1635539_Sup_tab_4.xlsx'
 
     try:
@@ -161,7 +195,7 @@ def protein_concentration_data():
             "AveExpr": gene_exp_data["AveExpr"].values[0]  # Prosečna ekspresija
         }
 
-        #Replacing possible NaN values
+        #Replacing possible NaN values with "N/A"
         additional_info = {k: (v if pd.notna(v) else "N/A") for k, v in additional_info.items()}
         expression_info = {k: (v if pd.notna(v) else "N/A") for k, v in expression_info.items()}
 
@@ -179,6 +213,16 @@ def protein_concentration_data():
 
 @app.route('/')
 def index():
+    """
+    Render the main page of the web application.
+
+    This function renders the homepage of the web application, including
+    the 3D model of a flower. The model is served from the 'static' folder.
+
+    Returns:
+        Rendered HTML page for the homepage.
+    """
+    # Prepare url for 3D model
     model_url = url_for('static', filename='models/gltf/Flower/Flower.glb')
     return render_template('index.html', model_url=model_url)
 
