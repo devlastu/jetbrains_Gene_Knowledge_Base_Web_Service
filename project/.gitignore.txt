@@ -1,0 +1,6 @@
+# JetBrains IDE folder
+.idea/
+
+# Python bytecode
+__pycache__/
+*.pyc
