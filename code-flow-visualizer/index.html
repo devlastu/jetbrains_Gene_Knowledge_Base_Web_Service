@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tt-inference-server Code Flow Visualizer</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
+        "camera-controls": "https://cdn.jsdelivr.net/npm/camera-controls@1.34.2/dist/camera-controls.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>tt-inference-server</h1>
+      <p>tt-media-server Code Flow</p>
+    </div>
+
+    <div id="search-container">
+      <input type="text" id="search-input" placeholder="Search nodes..." />
+    </div>
+
+    <div id="model-selector">
+      <h3>Models</h3>
+      <div id="model-buttons"></div>
+    </div>
+
+    <div id="device-config">
+      <h3>Hardware</h3>
+      <div id="device-type-buttons"></div>
+      <div class="dev-field">
+        <label for="device-ids-input">Device IDs</label>
+        <input type="text" id="device-ids-input" />
+      </div>
+      <div class="dev-field">
+        <label for="mesh-shape-input">Mesh Shape</label>
+        <input type="text" id="mesh-shape-input" />
+      </div>
+    </div>
+
+    <div id="legend">
+      <h3>Layers</h3>
+      <div id="legend-items"></div>
+    </div>
+
+    <div id="info-panel">
+      <h3>Node Details</h3>
+      <div class="info-empty">Hover or click a node to see details</div>
+    </div>
+  </div>
+
+  <div id="title-bar">
+    <h2>tt-media-server Architecture</h2>
+    <p>Click a model to trace its request path</p>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <div id="node-detail">
+    <button id="node-detail-close">×</button>
+    <div id="node-detail-content"></div>
+  </div>
+
+  <div id="bottom-bar">
+    <div id="timeline-container">
+      <div id="timeline-track"></div>
+    </div>
+    <div id="playback-controls">
+      <div id="playback-status">
+        <span id="ball-status-dot"></span>
+        <span id="ball-status-text">Ready</span>
+      </div>
+
+      <div class="pb-group pb-nav">
+        <button class="pb-icon" id="btn-node-prev" title="Previous node">⏮</button>
+        <button class="pb-icon" id="btn-step-prev" title="Previous step">◀</button>
+        <button class="pb-icon pb-main" id="btn-pause" title="Pause">⏸</button>
+        <button class="pb-icon" id="btn-step-next" title="Next step">▶</button>
+        <button class="pb-icon" id="btn-node-next" title="Next node">⏭</button>
+      </div>
+
+      <div class="pb-divider"></div>
+
+      <div class="pb-group">
+        <button class="pb-icon" id="btn-slow" title="Slow Down">▼</button>
+        <span id="speed-label">1×</span>
+        <button class="pb-icon" id="btn-reset-speed" title="Reset Speed">↺</button>
+      </div>
+
+      <div class="pb-divider"></div>
+
+      <div class="pb-group">
+        <button class="pb-toggle active" id="btn-follow" title="Camera follows ball">🔒 Follow</button>
+        <button class="pb-toggle active" id="btn-dive" title="Dive into node internals / Skip (D)">🔬 Dive</button>
+        <button class="pb-toggle accent" id="btn-explain" title="Explain this step (Enter)">💡 Explain</button>
+      </div>
+
+      <div class="pb-divider"></div>
+
+      <button class="pb-icon pb-stop" id="btn-stop" title="Stop">■</button>
+    </div>
+  </div>
+
+  <div id="call-stack">
+    <div id="call-stack-track"></div>
+  </div>
+
+  <div id="explain-panel">
+    <button id="explain-close">&times;</button>
+    <div id="explain-content"></div>
+    <button id="explain-resume">▶ Resume Animation</button>
+  </div>
+
+  <button id="btn-back-inside">&larr; Back</button>
+
+  <button id="reset-btn">Reset View</button>
+
+  <div id="zoom-controls">
+    <button class="zoom-btn" id="zoom-in" title="Zoom In">+</button>
+    <button class="zoom-btn" id="zoom-out" title="Zoom Out">&minus;</button>
+    <button class="zoom-btn" id="zoom-fit" title="Fit All">&#x2922;</button>
+    <button class="zoom-btn" id="overview-toggle" title="Toggle Layer Overview">&#x25A8;</button>
+  </div>
+
+  <script type="module">
+    import { init } from "./js/visualizer.js";
+    init();
+  </script>
+
+</body>
+</html>
